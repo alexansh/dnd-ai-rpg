@@ -2,6 +2,7 @@ import { generateMockTurn } from './mockDM.js';
 import { buildStoryConstraints } from './storyGuardrails.js';
 import { advanceWorldState } from './storyEngine.js';
 import { getMonster } from './dndDataService.js';
+import { matchAndInjectLore, registerNewCodexEntries } from './lorebookService.js';
 
 /**
  * Genre & Tone Modifier generator
@@ -38,6 +39,7 @@ export async function narrateTurn(turnPayload) {
       character,
       companions = [],
       action,
+      actionType = 'do',
       quest,
       location,
       checkResult,
@@ -49,6 +51,10 @@ export async function narrateTurn(turnPayload) {
     const storyConstraints = buildStoryConstraints(worldState, quest);
     const genreDirective = getGenreDirectives(quest?.tag);
 
+    // World Codex / Lorebook Keyword matching
+    const searchContext = `${action} ${location} ${quest?.title || ''} ${storySummary}`;
+    const { injectedText: lorebookContext } = matchAndInjectLore(searchContext);
+
     // Pre-fetch SRD monster reference if mentioned
     let srdContext = '';
     if (quest?.monsters && quest.monsters.length > 0) {
@@ -58,6 +64,7 @@ export async function narrateTurn(turnPayload) {
           srdContext = `
 D&D 5E SRD REFERENCE DATA:
 - Enemy: ${monsterData.name} (AC: ${monsterData.ac}, HP: ${monsterData.hp}, CR: ${monsterData.cr})
+- Traits: ${(monsterData.traits || []).map(t => `${t.name}: ${t.desc}`).join(' | ')}
 - Actions: ${monsterData.actions?.map(a => `${a.name}: ${a.desc}`).join(' | ')}
 `;
         }
@@ -65,19 +72,31 @@ D&D 5E SRD REFERENCE DATA:
     }
 
     const companionsContext = companions.length > 0
-      ? companions.map(c => `- ${c.name} (${c.class}, ${c.role}): HP ${c.hp}/${c.maxHp}, Trait: "${c.personality?.trait}", Priority: "${c.combatPriority}"`).join('\n')
+      ? companions.map(c => `- ${c.name} (${c.class}, ${c.role}): HP ${c.hp}/${c.maxHp}, Affinity: ${c.approval || 50}/100, Trait: "${c.personality?.trait}", Priority: "${c.combatPriority}"`).join('\n')
       : 'None (Solo Adventurer)';
+
+    let actionModeDirective = '';
+    if (actionType === 'say') {
+      actionModeDirective = `ACTION MODE [SAY]: The player spoke dialogue: "${action}". Emphasize NPC dialogue replies, vocal tone, body language, and immediate social reactions.`;
+    } else if (actionType === 'story') {
+      actionModeDirective = `ACTION MODE [STORY/DIRECTOR]: The player directly guided world events: "${action}". Seamlessly incorporate this narrative development into the scene.`;
+    } else {
+      actionModeDirective = `ACTION MODE [DO]: The player takes action: "${action}". Describe the physical attempt, stakes, and immediate environment reactions.`;
+    }
 
     const systemPrompt = `
 You are the Dungeon Master for "The Wayward Flagon", an authored tabletop RPG.
 Core Rules:
 1. Narrate strictly in 2 to 5 sentences. Never a wall of text. ALWAYS conclude with an actionable situation for the player.
 2. ${genreDirective}
+${actionModeDirective}
 ${storyConstraints}
+${lorebookContext}
 ${srdContext}
 3. Check Protocol: If action outcome is uncertain, dangerous, or requires skill, specify a check object (ability, dc, reason). If a check was just rolled (${checkResult ? `Result: ${checkResult.total} vs DC ${checkResult.dc} - ${checkResult.isSuccess ? 'SUCCESS' : 'FAILURE'}` : 'None'}), narrate the direct outcome and advance the scene.
-4. Companion Protocol: The party has 2 AI companions. Companions act AFTER player resolution according to their combatPriority. Companions speak dialogue ONLY on dramatic moments or crits (at most once every 3 turns).
+4. Companion Protocol: The party has 2 AI companions. Companions act AFTER player resolution according to their combatPriority. Return affinity changes when player decisions align with or conflict with companion morals.
 5. Always generate a 1-sentence "sceneHint" describing the visual environment for 16:9 illustration.
+6. If introducing a notable named NPC, location, relic, monster or faction for the first time, include them in "newCodexEntries".
 
 Respond STRICTLY with a valid JSON object matching this schema:
 {
@@ -92,8 +111,14 @@ Respond STRICTLY with a valid JSON object matching this schema:
   "companionActions": [
     { "name": "Companion Name", "action": "Tactical action description", "dialogue": "Short in-character quote" or null }
   ],
+  "affinityChanges": [
+    { "companion": "Companion Name", "delta": number (-5 to +10), "reason": "Brief reason" }
+  ],
+  "newCodexEntries": [
+    { "id": "entry_id", "title": "Name", "category": "Locations"|"NPCs"|"Factions"|"Relics"|"Monsters", "description": "1 sentence summary", "keywords": ["keyword1"] }
+  ],
   "flagsSet": ["optional_flag_name"],
-  "storyBeat": "EXPLORATION" | "COMBAT" | "PUZZLE" | "SOCIAL" | "BOSS" | "RESOLUTION",
+  "storyBeat": "EXPLORATION" | "COMBAT" | "PUZZLE" | "SOCIAL" | "BOSS" | "REST" | "RESOLUTION",
   "summaryDelta": "1 concise sentence summarizing what happened this turn"
 }
 `;
@@ -112,7 +137,7 @@ ${companionsContext}
 RECENT TURNS:
 ${history.slice(-4).map(h => `${h.role === 'user' ? 'Player' : h.role === 'companion' ? `Companion (${h.companionName})` : 'DM'}: ${h.content}`).join('\n')}
 
-LATEST PLAYER INPUT:
+LATEST PLAYER INPUT (${actionType.toUpperCase()}):
 ${checkResult ? `[CHECK RESOLVED: ${checkResult.ability} total ${checkResult.total} vs DC ${checkResult.dc} - ${checkResult.isSuccess ? 'SUCCESS' : 'FAILURE'} (Crit: ${checkResult.isCritSuccess || checkResult.isCritFail}). Player original intent: "${action}"]` : `Action: "${action}"`}
 `;
 
@@ -127,7 +152,7 @@ ${checkResult ? `[CHECK RESOLVED: ${checkResult.ability} total ${checkResult.tot
         generationConfig: {
           responseMimeType: 'application/json',
           temperature: 0.75,
-          maxOutputTokens: 900
+          maxOutputTokens: 950
         }
       })
     });
@@ -140,6 +165,11 @@ ${checkResult ? `[CHECK RESOLVED: ${checkResult.ability} total ${checkResult.tot
     const data = await res.json();
     const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '{}';
     const parsed = JSON.parse(rawText);
+
+    // Register any new codex discoveries
+    if (parsed.newCodexEntries && Array.isArray(parsed.newCodexEntries)) {
+      registerNewCodexEntries(parsed.newCodexEntries);
+    }
 
     // Update world state machine
     const nextWorldState = advanceWorldState(worldState, parsed);
@@ -154,6 +184,8 @@ ${checkResult ? `[CHECK RESOLVED: ${checkResult.ability} total ${checkResult.tot
       loot: Array.isArray(parsed.loot) ? parsed.loot : [],
       location: parsed.location || location,
       companionActions: Array.isArray(parsed.companionActions) ? parsed.companionActions : [],
+      affinityChanges: Array.isArray(parsed.affinityChanges) ? parsed.affinityChanges : [],
+      newCodexEntries: Array.isArray(parsed.newCodexEntries) ? parsed.newCodexEntries : [],
       flagsSet: Array.isArray(parsed.flagsSet) ? parsed.flagsSet : [],
       storyBeat: parsed.storyBeat || 'EXPLORATION',
       worldState: nextWorldState,

@@ -1,12 +1,12 @@
-const SCENE_STYLE_SUFFIX = 'wide-angle fantasy environment concept art, painterly digital art, muted amber and umber palette, dramatic volumetric lighting, high quality matte painting, atmospheric perspective, no text, no UI';
+const SCENE_STYLE_SUFFIX = 'wide-angle cinematic fantasy environment concept art, matte painting, atmospheric perspective, muted amber and umber palette, 8k masterpiece, no text, no characters, no ui';
 
 // In-memory cache: promptHash -> { imageUrl, isFallback, timestamp }
 const sceneCache = new Map();
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30 mins
 
 export async function generateSceneImage({ sceneDescription = '', location = 'Dungeon Vault', mood = 'calm' }) {
-  const cleanDesc = sceneDescription.trim() || `The ancient halls of ${location}`;
-  const prompt = `${cleanDesc}, ${location}, ${mood} atmosphere, ${SCENE_STYLE_SUFFIX}`;
+  const cleanDesc = sceneDescription.trim() || `The ancient stone corridors of ${location}`;
+  const prompt = `${cleanDesc}, ${location}, ${mood} lighting, ${SCENE_STYLE_SUFFIX}`;
   const cacheKey = `${location}-${cleanDesc}-${mood}`.toLowerCase();
 
   // Check cache

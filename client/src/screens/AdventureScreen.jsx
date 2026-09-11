@@ -1,19 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, Home, Dices, Flame, Sparkles, MapPin, Award, ArrowLeft, Coins, Gift, Eye, Compass, UserPlus, Heart, Swords } from 'lucide-react';
+import { Shield, Home, Dices, Flame, Sparkles, MapPin, Award, ArrowLeft, Coins, Gift, Eye, Compass, UserPlus, Heart, Swords, BookOpen, Package, Layers } from 'lucide-react';
 import NarrativeLog from '../components/NarrativeLog';
 import QuickActionChips from '../components/QuickActionChips';
 import CharacterSheet from '../components/CharacterSheet';
 import PartyBar from '../components/PartyBar';
 import SceneIllustration from '../components/SceneIllustration';
 import WorldMap2D from '../components/WorldMap2D';
+import DungeonNodeMap from '../components/DungeonNodeMap';
+import EncounterBar from '../components/EncounterBar';
 import DiceRollerModal from '../components/DiceRollerModal';
 import CampRestModal from '../components/CampRestModal';
-import { narrateAction, generateSceneIllustration } from '../services/api';
+import CodexModal from '../components/CodexModal';
+import LootCardModal from '../components/LootCardModal';
+import { narrateAction, generateSceneIllustration, fetchMonsterData } from '../services/api';
 import { SCENES } from '../constants/scenes';
 import { COMPANIONS_POOL } from '../constants/companions';
 import { useGame } from '../context/GameContext';
 import { soundFx } from '../services/audio';
+import { voiceEngine } from '../services/voiceEngine';
 
 export default function AdventureScreen() {
   const {
@@ -43,6 +48,20 @@ export default function AdventureScreen() {
     setQuickActions,
     activeTacticalBonus,
     setActiveTacticalBonus,
+    codexEntries,
+    unlockCodexEntry,
+    undoStack,
+    pushHistorySnapshot,
+    undoLastTurn,
+    editLogEntry,
+    activeMonsters,
+    setActiveMonsters,
+    turnOrder,
+    setTurnOrder,
+    currentCombatTurn,
+    setCurrentCombatTurn,
+    combatPosition,
+    setCombatPosition,
     recruitCompanion,
     adjustCompanionApproval,
     performCampRest,
@@ -51,30 +70,30 @@ export default function AdventureScreen() {
     saveGame
   } = useGame();
 
-  const [viewMode, setViewMode] = useState('narrative'); // 'narrative' | 'world_map'
+  const [viewMode, setViewMode] = useState('narrative'); // 'narrative' | 'world_map' | 'dungeon_map'
   const [isLoading, setIsLoading] = useState(false);
   const [sceneImageUrl, setSceneImageUrl] = useState(null);
   const [isSceneLoading, setIsSceneLoading] = useState(false);
   const [currentMood, setCurrentMood] = useState('calm');
   const [toastNotification, setToastNotification] = useState(null);
   const [isCampOpen, setIsCampOpen] = useState(false);
-  const [discoveredHotspots, setDiscoveredHotspots] = useState([]);
+  const [isCodexOpen, setIsCodexOpen] = useState(false);
+  const [inspectedItem, setInspectedItem] = useState(null);
+  const [lastActionSent, setLastActionSent] = useState(null);
 
   const sceneData = SCENES[currentSceneKey] || SCENES.crypt;
 
-  // Spawns/Hotspots for current campaign & world node
+  // Active Hotspots for Current Location
   const activeHotspots = activeCampaign?.hotspots || [
     { id: 'ancient_chest', label: 'Rune-Carved Chest', type: 'chest', check: 'DEX', dc: 12, inspect: 'Heavy iron chest with ancient seals.' },
     { id: 'glowing_altar', label: 'Eldritch Altar', type: 'altar', check: 'INT', dc: 13, inspect: 'Pulsing arcane glyphs carved into granite.' }
   ];
 
-  // Show floating toast
   const triggerToast = (text, type = 'loot') => {
     setToastNotification({ text, type, id: Date.now() });
     setTimeout(() => setToastNotification(null), 3000);
   };
 
-  // Asynchronous non-blocking scene illustration fetcher
   const updateSceneArt = async (hint, loc, mood) => {
     setIsSceneLoading(true);
     try {
@@ -93,7 +112,6 @@ export default function AdventureScreen() {
     }
   };
 
-  // Initial scene art generation on quest entry
   useEffect(() => {
     const initialMood = activeCampaign?.initialMood || 'exploration_wonder';
     soundFx.setMood(initialMood);
@@ -101,15 +119,20 @@ export default function AdventureScreen() {
     updateSceneArt(activeQuest?.initialNarration || activeCampaign?.description, currentLocation, 'calm');
   }, []);
 
-  // Send action to DM engine
-  const handlePlayerAction = async (actionText, actionType = 'custom', checkResult = null) => {
+  // Main DM Turn Handler
+  const handlePlayerAction = async (actionText, actionType = 'do', checkResult = null) => {
     if (isLoading) return;
+
+    // Save snapshot to history stack before executing state change
+    pushHistorySnapshot();
+    setLastActionSent({ actionText, actionType });
 
     // 1. Add player action message to log
     if (!checkResult) {
       const playerMsg = {
         id: `user-${Date.now()}`,
         role: 'user',
+        actionMode: actionType,
         content: actionText,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
@@ -118,11 +141,10 @@ export default function AdventureScreen() {
       const checkMsg = {
         id: `check-${Date.now()}`,
         role: 'system',
-        content: `🎲 ${checkResult.ability} Check: Rolled ${checkResult.total} (D20: ${checkResult.d20} ${checkResult.mod >= 0 ? '+' : ''}${checkResult.mod}${activeTacticalBonus ? ` +${activeTacticalBonus.bonus} [${activeTacticalBonus.companionName}'s Assist]` : ''}) vs DC ${checkResult.dc} — ${checkResult.isSuccess ? 'SUCCESS' : 'FAILURE'}`,
+        content: `🎲 ${checkResult.ability} Check: Rolled ${checkResult.total} (${checkResult.rollMode.toUpperCase()}: D20 ${checkResult.d20} ${checkResult.mod >= 0 ? '+' : ''}${checkResult.mod}${activeTacticalBonus ? ` +${activeTacticalBonus.bonus} [${activeTacticalBonus.companionName}'s Assist]` : ''}) vs DC ${checkResult.dc} — ${checkResult.isSuccess ? 'SUCCESS' : 'FAILURE'}`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
       setAdventureLog(prev => [...prev, checkMsg]);
-      // Reset active tactical bonus after consuming in check
       setActiveTacticalBonus(null);
     }
 
@@ -146,7 +168,7 @@ export default function AdventureScreen() {
         worldState
       });
 
-      // 2. Pocket Bard Reactive Transitions
+      // 2. Audio & Mood Transitions
       const isCombat = response.storyBeat === 'COMBAT' || Boolean(response.check?.reason?.toLowerCase().includes('attack') || response.check?.reason?.toLowerCase().includes('combat'));
       const isBoss = response.storyBeat === 'BOSS';
       const derivedMood = isCombat ? 'tense' : (isBoss ? 'ominous' : 'calm');
@@ -165,7 +187,31 @@ export default function AdventureScreen() {
         soundFx.setIntensity(3);
       }
 
-      // 3. Process HP / Gold / Loot state modifications
+      // 3. Combat Encounter State Sync
+      if (isCombat && activeMonsters.length === 0) {
+        const monsterName = activeCampaign?.monsters?.[0] || 'Goblin Raider';
+        const defaultMonster = {
+          id: `mob-${Date.now()}`,
+          name: monsterName,
+          ac: 14,
+          hp: 18,
+          maxHp: 18,
+          conditions: []
+        };
+        setActiveMonsters([defaultMonster]);
+
+        const initiativeList = [
+          { name: character?.name || 'Hero', initiative: 18, isPlayer: true },
+          { name: companions[0]?.name || 'Companion 1', initiative: 14 },
+          { name: monsterName, initiative: 11 },
+          { name: companions[1]?.name || 'Companion 2', initiative: 8 }
+        ];
+        setTurnOrder(initiativeList);
+      } else if (!isCombat && response.storyBeat !== 'BOSS' && activeMonsters.length > 0) {
+        setActiveMonsters([]);
+      }
+
+      // 4. Process HP / Gold / Loot
       let updatedChar = { ...character };
       if (response.hpChange) {
         updatedChar.hp = Math.max(0, Math.min(updatedChar.maxHp, updatedChar.hp + response.hpChange));
@@ -184,26 +230,18 @@ export default function AdventureScreen() {
       if (response.loot && response.loot.length > 0) {
         updatedChar.inventory = [...updatedChar.inventory, ...response.loot];
         soundFx.playSuccess(true);
-        triggerToast(`Found: ${response.loot.join(', ')}`, 'loot');
+        triggerToast(`Discovered: ${response.loot.join(', ')}`, 'loot');
       }
       setCharacter(updatedChar);
 
-      // 4. Update world state
-      if (response.worldState) {
-        setWorldState(response.worldState);
-      }
-
-      // 5. Update location if changed
-      if (response.location) {
-        setCurrentLocation(response.location);
-      }
-
-      // 6. Update story summary
+      // 5. World State & Location
+      if (response.worldState) setWorldState(response.worldState);
+      if (response.location) setCurrentLocation(response.location);
       if (response.summaryDelta) {
         setStorySummary(prev => (prev ? `${prev} ${response.summaryDelta}` : response.summaryDelta));
       }
 
-      // 7. Add DM narrative beat to log
+      // 6. DM Message & Voice TTS
       const dmMsg = {
         id: `dm-${Date.now()}`,
         role: 'dm',
@@ -211,19 +249,15 @@ export default function AdventureScreen() {
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
 
-      // 8. Add Companion Action beats & approval shifts
+      if (voiceEngine.getEnabled()) {
+        voiceEngine.speak(response.narration);
+      }
+
+      // 7. Companion Action & Affinity shifts
       const newEntries = [dmMsg];
       if (Array.isArray(response.companionActions)) {
         response.companionActions.forEach((compAct, idx) => {
           const compData = companions.find(c => c.name === compAct.name) || companions[idx] || { name: compAct.name, class: 'Ally', color: '#d4a574' };
-          
-          // Random contextual approval change if choice resonated
-          if (Math.random() > 0.65) {
-            const delta = Math.random() > 0.25 ? 5 : -3;
-            adjustCompanionApproval(compData.id, delta);
-            triggerToast(`${compData.name} ${delta > 0 ? 'Approves (+5)' : 'Disapproves (-3)'}`, delta > 0 ? 'approval' : 'damage');
-          }
-
           newEntries.push({
             id: `comp-${Date.now()}-${idx}`,
             role: 'companion',
@@ -237,19 +271,32 @@ export default function AdventureScreen() {
         });
       }
 
+      // Process affinity changes
+      if (Array.isArray(response.affinityChanges)) {
+        response.affinityChanges.forEach(aff => {
+          adjustCompanionApproval(aff.companion, aff.delta);
+          triggerToast(`${aff.companion} ${aff.delta > 0 ? `Approves (+${aff.delta})` : `Disapproves (${aff.delta})`}`, aff.delta > 0 ? 'approval' : 'damage');
+        });
+      }
+
+      // Process new codex discoveries
+      if (Array.isArray(response.newCodexEntries) && response.newCodexEntries.length > 0) {
+        response.newCodexEntries.forEach(entry => {
+          unlockCodexEntry(entry);
+          triggerToast(`Codex Entry Unlocked: ${entry.title}`, 'loot');
+        });
+      }
+
       setAdventureLog(prev => [...prev, ...newEntries]);
 
-      // 9. Asynchronously update scene illustration if hint provided
       if (response.sceneHint) {
         updateSceneArt(response.sceneHint, response.location || currentLocation, derivedMood);
       }
 
-      // 10. Set next quick action chips
       if (response.quickActions && response.quickActions.length > 0) {
         setQuickActions(response.quickActions);
       }
 
-      // 11. Check if DM calls for a dice roll
       if (response.check) {
         setPendingCheck({
           ...response.check,
@@ -274,10 +321,24 @@ export default function AdventureScreen() {
     handlePlayerAction(actionIntent, 'check', rollOutcome);
   };
 
+  const handleRetryTurn = () => {
+    if (!lastActionSent) return;
+    undoLastTurn();
+    setTimeout(() => {
+      handlePlayerAction(lastActionSent.actionText, lastActionSent.actionType);
+    }, 150);
+  };
+
   const handleHotspotClick = (spot) => {
     soundFx.playClick();
     soundFx.triggerSting('stealth_whisper');
-    handlePlayerAction(`I carefully approach and interact with the ${spot.label}. (${spot.inspect})`);
+    handlePlayerAction(`I carefully approach and interact with the ${spot.label}. (${spot.inspect})`, 'do');
+  };
+
+  const handleExecuteCombatAction = (actionDesc, type) => {
+    handlePlayerAction(actionDesc, 'do');
+    // Cycle combat turn
+    setCurrentCombatTurn(prev => (prev + 1) % Math.max(1, turnOrder.length));
   };
 
   return (
@@ -331,11 +392,11 @@ export default function AdventureScreen() {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            {/* View Mode Toggle: Scene Illustration vs 2D World Map */}
+            {/* View Mode Toggle */}
             <div className="inline-flex p-0.5 bg-tavern-darkest/90 border border-tavern-amber/40 rounded-lg shadow-inner">
               <button
                 onClick={() => { soundFx.playClick(); setViewMode('narrative'); }}
-                className={`px-2.5 py-1 rounded text-[11px] font-cinzel font-bold flex items-center gap-1.5 transition-all ${
+                className={`px-2.5 py-1 rounded text-[11px] font-cinzel font-bold flex items-center gap-1 transition-all ${
                   viewMode === 'narrative'
                     ? 'bg-tavern-amber text-tavern-darkest shadow-sm'
                     : 'text-tavern-gold/70 hover:text-tavern-gold'
@@ -346,17 +407,39 @@ export default function AdventureScreen() {
               </button>
               <button
                 onClick={() => { soundFx.playClick(); setViewMode('world_map'); }}
-                className={`px-2.5 py-1 rounded text-[11px] font-cinzel font-bold flex items-center gap-1.5 transition-all ${
+                className={`px-2.5 py-1 rounded text-[11px] font-cinzel font-bold flex items-center gap-1 transition-all ${
                   viewMode === 'world_map'
                     ? 'bg-tavern-amber text-tavern-darkest shadow-sm'
                     : 'text-tavern-gold/70 hover:text-tavern-gold'
                 }`}
               >
                 <Compass className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">2D Map</span>
+                <span className="hidden sm:inline">World</span>
+              </button>
+              <button
+                onClick={() => { soundFx.playClick(); setViewMode('dungeon_map'); }}
+                className={`px-2.5 py-1 rounded text-[11px] font-cinzel font-bold flex items-center gap-1 transition-all ${
+                  viewMode === 'dungeon_map'
+                    ? 'bg-tavern-amber text-tavern-darkest shadow-sm'
+                    : 'text-tavern-gold/70 hover:text-tavern-gold'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Delve</span>
               </button>
             </div>
 
+            {/* World Codex Button */}
+            <button
+              onClick={() => { soundFx.playClick(); setIsCodexOpen(true); }}
+              className="px-2.5 py-1.5 rounded-lg bg-tavern-wood hover:bg-tavern-umber border border-tavern-amber/40 text-tavern-gold font-cinzel font-bold text-xs shadow-sm flex items-center gap-1.5 transition-all active:scale-95"
+              title="Open World Codex & Lorebook"
+            >
+              <BookOpen className="w-3.5 h-3.5 text-tavern-glow" />
+              <span className="hidden sm:inline">Codex</span>
+            </button>
+
+            {/* Camp Button */}
             <button
               onClick={() => { soundFx.playClick(); setIsCampOpen(true); }}
               className="px-3 py-1.5 rounded-lg bg-amber-950/80 hover:bg-amber-900 border border-amber-500/60 text-amber-200 font-cinzel font-bold text-xs shadow-sm flex items-center gap-1.5 transition-all active:scale-95"
@@ -365,6 +448,7 @@ export default function AdventureScreen() {
               <span>Camp</span>
             </button>
 
+            {/* Tavern Return Button */}
             <button
               onClick={() => returnToTavern(turnCount >= 3 || worldState.questStage >= 4)}
               className="px-3 py-1.5 rounded-lg bg-tavern-wood hover:bg-tavern-umber border border-tavern-amber/40 text-tavern-gold font-cinzel font-bold text-xs shadow-sm flex items-center gap-1.5 transition-all active:scale-95"
@@ -375,7 +459,22 @@ export default function AdventureScreen() {
           </div>
         </div>
 
-        {/* Party Bar with Tactical Skills and Camp Trigger */}
+        {/* 5e Tactical Encounter Bar (When active monsters present or in combat) */}
+        {activeMonsters.length > 0 && (
+          <EncounterBar
+            monsters={activeMonsters}
+            turnOrder={turnOrder}
+            currentTurnIndex={currentCombatTurn}
+            player={character}
+            companions={companions}
+            activePosition={combatPosition}
+            onChangePosition={(pos) => setCombatPosition(pos)}
+            onExecuteCombatAction={handleExecuteCombatAction}
+            disabled={isLoading}
+          />
+        )}
+
+        {/* Party Bar with Tactical Assist & Affinity Meters */}
         <PartyBar
           player={character}
           companions={companions}
@@ -383,9 +482,9 @@ export default function AdventureScreen() {
           onOpenCamp={() => setIsCampOpen(true)}
         />
 
-        {/* Main Adventure Panel */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 h-[calc(100vh-210px)] min-h-[500px]">
-          {/* Left Column: Dynamic Scene or 2D Map + AI DM Log & Input */}
+        {/* Main 2-Column Adventure Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 h-[calc(100vh-220px)] min-h-[500px]">
+          {/* Left Column: Scene / World Map / Dungeon Map + Narrative Log + Input */}
           <div className="lg:col-span-8 flex flex-col h-full space-y-3 min-w-0">
             {viewMode === 'world_map' ? (
               <WorldMap2D
@@ -394,8 +493,15 @@ export default function AdventureScreen() {
                 onSelectNode={(node) => travelToWorldNode(node)}
                 playerCharacter={character}
               />
+            ) : viewMode === 'dungeon_map' ? (
+              <DungeonNodeMap
+                nodes={activeCampaign?.startingNodes}
+                currentNodeId={activeWorldNode?.id}
+                onSelectNode={(node) => travelToWorldNode(node)}
+                locationName={currentLocation}
+              />
             ) : (
-              /* Dynamic AI Scene Illustration with Interactive Hotspots */
+              /* 16:9 Dynamic Scene Illustration with Interactive Hotspots */
               <div className="relative">
                 <SceneIllustration
                   sceneImageUrl={sceneImageUrl}
@@ -406,7 +512,7 @@ export default function AdventureScreen() {
                   isLoading={isSceneLoading}
                 />
 
-                {/* Interactive World Hotspot Chips */}
+                {/* Hotspot Chips */}
                 <div className="absolute bottom-2.5 left-2.5 right-2.5 flex flex-wrap gap-2 z-10 pointer-events-auto">
                   {activeHotspots.map((spot) => (
                     <button
@@ -425,29 +531,34 @@ export default function AdventureScreen() {
               </div>
             )}
 
-            {/* Narrative Log Stream */}
+            {/* Narrative Log Stream with Inline DM Editing */}
             <NarrativeLog
               log={adventureLog}
               storySummary={storySummary}
               isLoading={isLoading}
+              onEditMessage={(id, content) => editLogEntry(id, content)}
             />
 
-            {/* Quick Action Chips & Input Bar */}
+            {/* 3-Mode Do / Say / Story Action Bar with Director Undo / Retry */}
             <QuickActionChips
               onAction={(act, type) => handlePlayerAction(act, type)}
               dynamicChips={quickActions}
               disabled={isLoading || Boolean(pendingCheck)}
+              onUndo={undoLastTurn}
+              onRetry={handleRetryTurn}
+              canUndo={undoStack.length > 0}
+              canRetry={Boolean(lastActionSent)}
             />
           </div>
 
           {/* Right Column: Character Sheet Panel */}
           <div className="lg:col-span-4 h-full overflow-y-auto">
-            <CharacterSheet />
+            <CharacterSheet onInspectItem={(item) => setInspectedItem(item)} />
           </div>
         </div>
       </div>
 
-      {/* D20 Check Modal Trigger */}
+      {/* 5e D20 Check Modal */}
       {pendingCheck && (
         <DiceRollerModal
           check={pendingCheck}
@@ -458,7 +569,7 @@ export default function AdventureScreen() {
         />
       )}
 
-      {/* Camp Rest & Dialogue Modal */}
+      {/* Camp Rest & Social Phase Modal */}
       {isCampOpen && (
         <CampRestModal
           isOpen={isCampOpen}
@@ -467,6 +578,25 @@ export default function AdventureScreen() {
           playerCharacter={character}
           onTakeRest={(type) => performCampRest(type)}
           onCompanionTalk={(compId, delta) => adjustCompanionApproval(compId, delta)}
+        />
+      )}
+
+      {/* World Codex & Lorebook Modal */}
+      {isCodexOpen && (
+        <CodexModal
+          isOpen={isCodexOpen}
+          onClose={() => setIsCodexOpen(false)}
+          codexEntries={codexEntries}
+        />
+      )}
+
+      {/* Parchment Loot & Item Inspection Modal */}
+      {inspectedItem && (
+        <LootCardModal
+          isOpen={Boolean(inspectedItem)}
+          onClose={() => setInspectedItem(null)}
+          item={inspectedItem}
+          onUseItem={(name) => useItem(name)}
         />
       )}
     </div>

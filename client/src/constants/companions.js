@@ -292,11 +292,9 @@ export const COMPANIONS_POOL = [
 ];
 
 export function getApprovalRating(approvalScore = 50) {
-  if (approvalScore >= 80) return { label: 'Exceptional', color: 'text-amber-300', icon: '🌟' };
-  if (approvalScore >= 60) return { label: 'Favorable', color: 'text-emerald-400', icon: '👍' };
-  if (approvalScore >= 40) return { label: 'Neutral', color: 'text-stone-300', icon: '⚖️' };
-  if (approvalScore >= 20) return { label: 'Discontent', color: 'text-orange-400', icon: '👎' };
-  return { label: 'Hostile', color: 'text-red-500', icon: '⚔️' };
+  if (approvalScore >= 76) return { label: 'Devoted Ally', color: 'text-amber-300 border-amber-400', icon: '🌟' };
+  if (approvalScore >= 26) return { label: 'Loyal Companion', color: 'text-emerald-400 border-emerald-500', icon: '🛡️' };
+  return { label: 'Distrustful', color: 'text-red-400 border-red-500', icon: '⚠️' };
 }
 
 export function getComplementaryCompanions(playerClass = 'Warrior') {

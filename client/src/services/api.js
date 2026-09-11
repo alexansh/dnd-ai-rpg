@@ -137,3 +137,46 @@ export async function compressStorySummary({ currentSummary, recentEvents }) {
     return { summary: currentSummary };
   }
 }
+
+export async function fetchLorebook() {
+  try {
+    const res = await fetch('/api/lorebook');
+    if (!res.ok) throw new Error('Failed to fetch lorebook');
+    const data = await res.json();
+    return data.entries || [];
+  } catch (e) {
+    console.warn('Lorebook fetch fallback:', e);
+    return [];
+  }
+}
+
+export async function fetchMonsterData(name) {
+  try {
+    const res = await fetch(`/api/dnd/monster/${encodeURIComponent(name)}`);
+    if (!res.ok) throw new Error('Monster lookup failed');
+    return await res.json();
+  } catch (e) {
+    return null;
+  }
+}
+
+export async function fetchSpellData(name) {
+  try {
+    const res = await fetch(`/api/dnd/spell/${encodeURIComponent(name)}`);
+    if (!res.ok) throw new Error('Spell lookup failed');
+    return await res.json();
+  } catch (e) {
+    return null;
+  }
+}
+
+export async function fetchItemData(name) {
+  try {
+    const res = await fetch(`/api/dnd/item/${encodeURIComponent(name)}`);
+    if (!res.ok) throw new Error('Item lookup failed');
+    return await res.json();
+  } catch (e) {
+    return null;
+  }
+}
+

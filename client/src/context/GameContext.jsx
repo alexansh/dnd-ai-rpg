@@ -4,9 +4,63 @@ import { SAMPLE_QUESTS } from '../constants/sampleQuests';
 import { CAMPAIGN_PRESETS } from '../constants/campaigns';
 import { COMPANIONS_POOL, getComplementaryCompanions } from '../constants/companions';
 import { soundFx } from '../services/audio';
+import { voiceEngine } from '../services/voiceEngine';
+import { fetchLorebook } from '../services/api';
 
 const STORAGE_KEY = 'wayward_flagon_save_v2';
 const CUSTOM_QUESTS_KEY = 'wayward_flagon_custom_quests';
+const CODEX_KEY = 'wayward_flagon_codex';
+
+const INITIAL_CODEX = [
+  {
+    id: 'loc_wayward_flagon',
+    title: 'The Wayward Flagon',
+    category: 'Locations',
+    keywords: ['wayward flagon', 'tavern', 'hearth', 'barnaby', 'taproom'],
+    description: 'A cozy sanctuary at the crossroads of civilization and the wild frontier. Managed by Barnaby the stout dwarf, its warm hearth and spiced cider have sheltered adventurers for generations.',
+    discovered: true
+  },
+  {
+    id: 'npc_barnaby',
+    title: 'Barnaby Stonebeard',
+    category: 'NPCs',
+    keywords: ['barnaby', 'innkeeper', 'stonebeard', 'barkeep'],
+    description: 'A retired dwarven vanguard turned jovial tavern keeper. He knows every rumor within fifty leagues and keeps a loaded heavy crossbow under the polished oak bar.',
+    discovered: true
+  },
+  {
+    id: 'faction_iron_covenant',
+    title: 'The Iron Covenant',
+    category: 'Factions',
+    keywords: ['iron covenant', 'mercenaries', 'black legion', 'covenant'],
+    description: 'A disciplined faction of warbands and monster hunters operating across the borderlands. They uphold contracts with ruthless precision and wear blackened steel pauldrons.',
+    discovered: true
+  },
+  {
+    id: 'loc_sunken_crypt',
+    title: 'The Sunken Crypt of Oros',
+    category: 'Locations',
+    keywords: ['crypt', 'oros', 'sunken', 'catacombs', 'sarcophagus', 'tomb'],
+    description: 'Ancient subterranean burial chambers flooded with murky brackish water. Built during the First Age to seal the restless spirits of the Netherese court.',
+    discovered: false
+  },
+  {
+    id: 'relic_crown_of_ember',
+    title: 'Crown of the Ash Sovereign',
+    category: 'Relics',
+    keywords: ['crown', 'ash sovereign', 'relic', 'ember crown', 'flame circlet'],
+    description: 'A wrought-iron coronet perpetually radiating smoldering heat. Legend says it allows its bearer to command primal magma and withstand draconic fire.',
+    discovered: false
+  },
+  {
+    id: 'monster_cinder_wyrmling',
+    title: 'Cinder Wyrmling',
+    category: 'Monsters',
+    keywords: ['wyrmling', 'red dragon', 'dragon', 'drake', 'cinder'],
+    description: 'A young draconic beast with obsidian scales and molten blood. Highly aggressive and territorial, possessing a devastating breath of superheated sulfur.',
+    discovered: false
+  }
+];
 
 const GameContext = createContext(null);
 
@@ -27,19 +81,112 @@ export function GameProvider({ children }) {
   const [completedQuests, setCompletedQuests] = useState([]);
   const [pendingCheck, setPendingCheck] = useState(null);
   const [isAudioMuted, setIsAudioMuted] = useState(false);
+  const [isVoiceEnabled, setIsVoiceEnabled] = useState(false);
   const [serverStatus, setServerStatus] = useState({ mode: 'checking' });
   const [quickActions, setQuickActions] = useState([]);
   const [activeTacticalBonus, setActiveTacticalBonus] = useState(null);
 
-  // Load saved custom quests
+  // World Codex Lorebook
+  const [codexEntries, setCodexEntries] = useState(INITIAL_CODEX);
+
+  // Undo / Retry History Stack (Max 10 snapshots)
+  const [undoStack, setUndoStack] = useState([]);
+
+  // Tactical 5e Combat State
+  const [activeMonsters, setActiveMonsters] = useState([]);
+  const [turnOrder, setTurnOrder] = useState([]);
+  const [currentCombatTurn, setCurrentCombatTurn] = useState(0);
+  const [combatPosition, setCombatPosition] = useState('Engaged (Melee)');
+
+  // Load saved custom quests & codex
   useEffect(() => {
     try {
       const savedQuests = localStorage.getItem(CUSTOM_QUESTS_KEY);
       if (savedQuests) {
         setCustomQuests(JSON.parse(savedQuests));
       }
+      const savedCodex = localStorage.getItem(CODEX_KEY);
+      if (savedCodex) {
+        setCodexEntries(JSON.parse(savedCodex));
+      }
     } catch (e) {}
   }, []);
+
+  const pushHistorySnapshot = () => {
+    if (!character) return;
+    const snapshot = {
+      character: JSON.parse(JSON.stringify(character)),
+      companions: JSON.parse(JSON.stringify(companions)),
+      adventureLog: [...adventureLog],
+      storySummary,
+      turnCount,
+      worldState: { ...worldState },
+      currentLocation,
+      currentSceneKey,
+      activeWorldNode: activeWorldNode ? { ...activeWorldNode } : null,
+      activeCampaign: activeCampaign ? { ...activeCampaign } : null,
+      activeMonsters: [...activeMonsters]
+    };
+    setUndoStack(prev => [snapshot, ...prev].slice(0, 10));
+  };
+
+  const undoLastTurn = () => {
+    if (undoStack.length === 0) return false;
+    soundFx.playClick();
+    const [previous, ...rest] = undoStack;
+
+    if (previous) {
+      setCharacter(previous.character);
+      setCompanions(previous.companions);
+      setAdventureLog(previous.adventureLog);
+      setStorySummary(previous.storySummary);
+      setTurnCount(previous.turnCount);
+      setWorldState(previous.worldState);
+      setCurrentLocation(previous.currentLocation);
+      setCurrentSceneKey(previous.currentSceneKey);
+      if (previous.activeWorldNode) setActiveWorldNode(previous.activeWorldNode);
+      if (previous.activeCampaign) setActiveCampaign(previous.activeCampaign);
+      if (previous.activeMonsters) setActiveMonsters(previous.activeMonsters);
+      setUndoStack(rest);
+
+      setAdventureLog(prev => [
+        ...prev,
+        {
+          id: `undo-${Date.now()}`,
+          role: 'system',
+          content: '⏪ **Director\'s Undo**: Previous turn rolled back. Prior HP, items, and narrative state restored.',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }
+      ]);
+      return true;
+    }
+    return false;
+  };
+
+  const editLogEntry = (id, newContent) => {
+    setAdventureLog(prev => prev.map(entry => {
+      if (entry.id === id) {
+        return { ...entry, content: newContent, isEdited: true };
+      }
+      return entry;
+    }));
+  };
+
+  const unlockCodexEntry = (entry) => {
+    setCodexEntries(prev => {
+      const exists = prev.find(e => e.id === entry.id || e.title.toLowerCase() === entry.title.toLowerCase());
+      let updated;
+      if (exists) {
+        updated = prev.map(e => (e.id === exists.id ? { ...e, ...entry, discovered: true } : e));
+      } else {
+        updated = [{ ...entry, discovered: true }, ...prev];
+      }
+      try {
+        localStorage.setItem(CODEX_KEY, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+  };
 
   const saveGame = (customChar = null, customCompanions = null, customScreen = null) => {
     try {
@@ -58,6 +205,7 @@ export function GameProvider({ children }) {
         turnCount,
         worldState,
         completedQuests,
+        codexEntries,
         currentScreen: customScreen || currentScreen,
         lastSaved: new Date().toISOString()
       };
@@ -85,9 +233,9 @@ export function GameProvider({ children }) {
           setTurnCount(data.turnCount || 0);
           setWorldState(data.worldState || { questStage: 1, totalStages: 4, flags: {} });
           setCompletedQuests(data.completedQuests || []);
+          if (data.codexEntries) setCodexEntries(data.codexEntries);
           setCurrentScreen(data.currentScreen === 'create' ? 'tavern' : (data.currentScreen || 'tavern'));
 
-          // Restore music mood
           soundFx.setMood(data.currentScreen === 'adventure' ? (data.activeCampaign?.initialMood || 'exploration_wonder') : 'tavern_calm');
           return true;
         }
@@ -118,9 +266,11 @@ export function GameProvider({ children }) {
     setAdventureLog([]);
     setStorySummary('');
     setTurnCount(0);
+    setUndoStack([]);
     setWorldState({ questStage: 1, totalStages: 4, flags: {} });
     setCompletedQuests([]);
     setPendingCheck(null);
+    setActiveMonsters([]);
     setCurrentLocation('The Wayward Flagon Tavern');
     setCurrentSceneKey('tavern');
     setCurrentScreen('create');
@@ -146,7 +296,6 @@ export function GameProvider({ children }) {
           inventory: activeQuest.rewardItem ? [...character.inventory, activeQuest.rewardItem] : character.inventory,
           hp: Math.min(character.maxHp, character.hp + 6)
         };
-        // Heal companions on tavern return
         const healedComps = companions.map(c => ({ ...c, hp: c.maxHp, isFallen: false }));
         setCharacter(updated);
         setCompanions(healedComps);
@@ -154,6 +303,7 @@ export function GameProvider({ children }) {
       }
     }
     setActiveQuest(null);
+    setActiveMonsters([]);
     setCurrentLocation('The Wayward Flagon Tavern');
     setCurrentSceneKey('tavern');
     setPendingCheck(null);
@@ -183,9 +333,9 @@ export function GameProvider({ children }) {
     setCurrentLocation(startNode.name);
     setCurrentSceneKey(campaign.environment || 'crypt');
     setTurnCount(0);
+    setUndoStack([]);
     setWorldState({ questStage: 1, totalStages: nodes.length || 4, flags: {} });
 
-    // Initial narrative introduction
     const introBeat = {
       id: `msg-${Date.now()}`,
       role: 'dm',
@@ -201,7 +351,6 @@ export function GameProvider({ children }) {
       'Check in with your companions before advancing'
     ]);
 
-    // Initialize complementary companions if party is currently empty
     if (companions.length === 0 && character) {
       setCompanions(getComplementaryCompanions(character.class));
     }
@@ -214,16 +363,16 @@ export function GameProvider({ children }) {
 
   const travelToWorldNode = (node) => {
     if (!node || !activeCampaign) return;
+    pushHistorySnapshot();
     soundFx.playClick();
     soundFx.triggerSting('secret_found');
 
     setActiveWorldNode(node);
     setCurrentLocation(node.name);
 
-    // Update campaign nodes to unlock this node and any newly connected nodes
     if (activeCampaign.startingNodes) {
       const updatedNodes = activeCampaign.startingNodes.map(n => {
-        if (n.id === node.id) return { ...n, unlocked: true };
+        if (n.id === node.id) return { ...n, unlocked: true, visited: true };
         if (node.connectedTo && node.connectedTo.includes(n.id)) return { ...n, unlocked: true };
         return n;
       });
@@ -246,16 +395,12 @@ export function GameProvider({ children }) {
     ]);
   };
 
-  const launchCampaign = (campaign) => {
-    launchWorldCampaign(campaign);
-  };
-
-
   const launchQuest = (quest) => {
     setActiveQuest(quest);
     setCurrentLocation(quest.location);
     setCurrentSceneKey(quest.sceneType || 'crypt');
     setTurnCount(0);
+    setUndoStack([]);
     setWorldState({ questStage: 1, totalStages: 4, flags: {} });
 
     const initialBeat = {
@@ -282,11 +427,9 @@ export function GameProvider({ children }) {
     soundFx.setMood('exploration_wonder');
   };
 
-  // BG3-Style Party Management
   const recruitCompanion = (companionId) => {
     const template = COMPANIONS_POOL.find(c => c.id === companionId);
     if (!template) return;
-
     if (companions.some(c => c.id === companionId)) return;
 
     const newCompanion = {
@@ -307,7 +450,7 @@ export function GameProvider({ children }) {
       {
         id: `recruit-${Date.now()}`,
         role: 'system',
-        content: `⚔️ **${template.name}** (${template.class}) has joined your party! [Approval: Favorable (55)]`,
+        content: `⚔️ **${template.name}** (${template.class}) has joined your party! [Affinity: Loyal (55/100)]`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       }
     ]);
@@ -316,7 +459,7 @@ export function GameProvider({ children }) {
 
   const adjustCompanionApproval = (companionId, delta) => {
     setCompanions(prev => prev.map(c => {
-      if (c.id === companionId) {
+      if (c.id === companionId || c.name.toLowerCase().includes(companionId.toLowerCase())) {
         const newScore = Math.max(0, Math.min(100, (c.approval || 50) + delta));
         return { ...c, approval: newScore };
       }
@@ -327,10 +470,22 @@ export function GameProvider({ children }) {
   const performCampRest = (restType = 'long') => {
     soundFx.playClick();
     if (!character) return;
+    pushHistorySnapshot();
 
     const healAmount = restType === 'long' ? character.maxHp : Math.round(character.maxHp * 0.5);
     const newCharHp = Math.min(character.maxHp, character.hp + healAmount);
-    const updatedChar = { ...character, hp: newCharHp };
+
+    // Reset spell slots on long rest
+    const updatedSpellSlots = {
+      level1: { total: 3, current: 3 },
+      level2: { total: 2, current: 2 }
+    };
+
+    const updatedChar = {
+      ...character,
+      hp: newCharHp,
+      spellSlots: restType === 'long' ? updatedSpellSlots : character.spellSlots
+    };
     setCharacter(updatedChar);
 
     const updatedCompanions = companions.map(c => ({
@@ -345,7 +500,7 @@ export function GameProvider({ children }) {
       {
         id: `rest-${Date.now()}`,
         role: 'system',
-        content: `🏕️ The party took a **${restType === 'long' ? 'Long Rest' : 'Short Rest'}** by the campfire. Wounds are dressed and spirits restored.`,
+        content: `🏕️ The party took a **${restType === 'long' ? 'Long Rest (8 Hours)' : 'Short Rest (1 Hour)'}** by the campfire. ${restType === 'long' ? 'All HP, Hit Dice, and Spell Slots fully restored.' : 'Wounds dressed; recovered 50% HP.'}`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       }
     ]);
@@ -409,7 +564,7 @@ export function GameProvider({ children }) {
       {
         id: `item-${Date.now()}`,
         role: 'system',
-        content: `⚔️ You readied ${itemName} from your adventurer's pack.`,
+        content: `⚔️ Action Performed: ${itemName}.`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       }
     ]);
@@ -418,6 +573,12 @@ export function GameProvider({ children }) {
   const toggleAudio = () => {
     const isMuted = soundFx.toggleMute();
     setIsAudioMuted(isMuted);
+  };
+
+  const toggleVoiceNarration = () => {
+    const next = !isVoiceEnabled;
+    setIsVoiceEnabled(next);
+    voiceEngine.setEnabled(next);
   };
 
   return (
@@ -459,14 +620,30 @@ export function GameProvider({ children }) {
         setActiveTacticalBonus,
         isAudioMuted,
         toggleAudio,
+        isVoiceEnabled,
+        toggleVoiceNarration,
         serverStatus,
         setServerStatus,
+        codexEntries,
+        unlockCodexEntry,
+        undoStack,
+        pushHistorySnapshot,
+        undoLastTurn,
+        editLogEntry,
+        activeMonsters,
+        setActiveMonsters,
+        turnOrder,
+        setTurnOrder,
+        currentCombatTurn,
+        setCurrentCombatTurn,
+        combatPosition,
+        setCombatPosition,
         saveGame,
         loadGame,
         hasSaveGame,
         startNewGame,
         returnToTavern,
-        launchCampaign,
+        launchCampaign: launchWorldCampaign,
         launchWorldCampaign,
         travelToWorldNode,
         launchQuest,
@@ -487,4 +664,3 @@ export function useGame() {
   if (!ctx) throw new Error('useGame must be used within a GameProvider');
   return ctx;
 }
-

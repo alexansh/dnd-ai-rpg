@@ -270,7 +270,28 @@ export default function AudioPlayer() {
             </div>
           </div>
 
-          {/* 5. Volume Sliders */}
+          {/* 5. AI Voice Narration (TTS) Toggle */}
+          <div className="border-t border-tavern-amber/20 pt-2.5 flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-tavern-glow" />
+              <div>
+                <span className="font-cinzel font-bold text-tavern-gold block">AI Voice Narration</span>
+                <span className="text-[10px] text-stone-400">Web Speech TTS</span>
+              </div>
+            </div>
+            <button
+              onClick={() => { soundFx.playClick(); toggleVoiceNarration(); }}
+              className={`px-3 py-1 rounded-lg text-xs font-cinzel font-bold border transition-all ${
+                isVoiceEnabled
+                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-stone-950 border-emerald-400 shadow-sm'
+                  : 'bg-stone-900 text-stone-400 border-stone-800 hover:text-stone-200'
+              }`}
+            >
+              {isVoiceEnabled ? 'Voice: Active' : 'Voice: Muted'}
+            </button>
+          </div>
+
+          {/* 6. Volume Sliders */}
           <div className="space-y-2 border-t border-tavern-amber/20 pt-2.5 text-[11px]">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">

@@ -1,12 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Dices, Sparkles, AlertCircle, CheckCircle2, XCircle, Flame } from 'lucide-react';
+import { Dices, Sparkles, CheckCircle2, XCircle, Flame, Shield, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { soundFx } from '../services/audio';
 import { getStatModifier } from '../constants/archetypes';
 
 export default function DiceRollerModal({ check, character, tacticalBonus, onRollComplete, onCancel }) {
+  const [rollMode, setRollMode] = useState('normal'); // 'normal' | 'advantage' | 'disadvantage'
   const [isRolling, setIsRolling] = useState(false);
-  const [d20Result, setD20Result] = useState(null);
+  const [d20ResultA, setD20ResultA] = useState(null);
+  const [d20ResultB, setD20ResultB] = useState(null);
   const [hasRolled, setHasRolled] = useState(false);
 
   const ability = check?.ability || 'STR';
@@ -15,23 +17,31 @@ export default function DiceRollerModal({ check, character, tacticalBonus, onRol
 
   const charScore = character?.stats?.[ability] || 10;
   const modNum = Math.floor((charScore - 10) / 2);
-  const modStr = getStatModifier(charScore);
   const bonusNum = tacticalBonus ? (tacticalBonus.bonus || 0) : 0;
 
-  const totalScore = d20Result !== null ? d20Result + modNum + bonusNum : null;
-  const isSuccess = totalScore !== null ? totalScore >= dc : false;
-  const isCritSuccess = d20Result === 20;
-  const isCritFail = d20Result === 1;
+  // Selected final die based on Advantage / Disadvantage
+  const effectiveD20 = (() => {
+    if (d20ResultA === null) return null;
+    if (rollMode === 'normal') return d20ResultA;
+    if (rollMode === 'advantage') return Math.max(d20ResultA, d20ResultB || d20ResultA);
+    if (rollMode === 'disadvantage') return Math.min(d20ResultA, d20ResultB || d20ResultA);
+    return d20ResultA;
+  })();
 
-  // 12 particles radiating outward on Crit 20
-  const particles = Array.from({ length: 12 }).map((_, i) => {
-    const angle = (i / 12) * Math.PI * 2;
-    const distance = 80 + Math.random() * 30;
+  const totalScore = effectiveD20 !== null ? effectiveD20 + modNum + bonusNum : null;
+  const isSuccess = totalScore !== null ? totalScore >= dc : false;
+  const isCritSuccess = effectiveD20 === 20;
+  const isCritFail = effectiveD20 === 1;
+
+  // 20 particles radiating outward on Crit 20
+  const particles = Array.from({ length: 20 }).map((_, i) => {
+    const angle = (i / 20) * Math.PI * 2;
+    const distance = 90 + Math.random() * 40;
     return {
       x: Math.cos(angle) * distance,
       y: Math.sin(angle) * distance,
       size: 4 + Math.random() * 6,
-      delay: i * 0.03
+      delay: i * 0.02
     };
   });
 
@@ -42,20 +52,29 @@ export default function DiceRollerModal({ check, character, tacticalBonus, onRol
 
     let iterations = 0;
     const interval = setInterval(() => {
-      setD20Result(Math.floor(Math.random() * 20) + 1);
+      setD20ResultA(Math.floor(Math.random() * 20) + 1);
+      if (rollMode !== 'normal') {
+        setD20ResultB(Math.floor(Math.random() * 20) + 1);
+      }
       iterations++;
       if (iterations > 14) {
         clearInterval(interval);
-        const finalD20 = Math.floor(Math.random() * 20) + 1;
-        setD20Result(finalD20);
+        const finalA = Math.floor(Math.random() * 20) + 1;
+        const finalB = Math.floor(Math.random() * 20) + 1;
+        setD20ResultA(finalA);
+        setD20ResultB(finalB);
         setIsRolling(false);
         setHasRolled(true);
 
-        const total = finalD20 + modNum;
-        if (finalD20 === 20 || total >= dc) {
-          soundFx.playSuccess(finalD20 === 20);
+        const chosen = rollMode === 'advantage' ? Math.max(finalA, finalB) : rollMode === 'disadvantage' ? Math.min(finalA, finalB) : finalA;
+        const total = chosen + modNum + bonusNum;
+
+        if (chosen === 20 || total >= dc) {
+          soundFx.playSuccess(chosen === 20);
+          if (chosen === 20) soundFx.triggerSting('victory_fanfare');
         } else {
           soundFx.playFailure();
+          if (chosen === 1) soundFx.triggerSting('sword_clash');
         }
       }
     }, 80);
@@ -65,8 +84,12 @@ export default function DiceRollerModal({ check, character, tacticalBonus, onRol
     soundFx.playClick();
     onRollComplete({
       ability,
-      d20: d20Result,
+      d20: effectiveD20,
+      d20A: d20ResultA,
+      d20B: rollMode !== 'normal' ? d20ResultB : null,
+      rollMode,
       mod: modNum,
+      bonus: bonusNum,
       total: totalScore,
       dc,
       isSuccess,
@@ -77,23 +100,23 @@ export default function DiceRollerModal({ check, character, tacticalBonus, onRol
 
   return (
     <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md transition-all duration-300 ${
-      hasRolled && isCritFail ? 'screen-red-flash' : ''
+      hasRolled && isCritFail ? 'ring-8 ring-red-900 bg-red-950/40' : ''
     }`}>
       <motion.div
         initial={{ scale: 0.88, opacity: 0, y: 25 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.88, opacity: 0 }}
         transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-        className="w-full max-w-md bg-tavern-wood border-2 border-tavern-gold rounded-2xl p-6 shadow-candle-lg text-tavern-parchment relative overflow-hidden"
+        className="w-full max-w-lg bg-tavern-wood border-2 border-tavern-gold rounded-2xl p-6 shadow-candle-lg text-tavern-parchment relative overflow-hidden"
       >
         {/* Glow background accent */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-24 bg-tavern-glow/15 blur-2xl pointer-events-none rounded-full" />
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-56 h-24 bg-tavern-glow/15 blur-2xl pointer-events-none rounded-full" />
 
         {/* Header */}
-        <div className="text-center mb-5">
+        <div className="text-center mb-4">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-tavern-umber/80 border border-tavern-amber text-xs font-cinzel text-tavern-gold uppercase tracking-wider mb-2">
             <Dices className="w-3.5 h-3.5" />
-            <span>Tabletop Ability Check</span>
+            <span>Tabletop 5e Check</span>
           </div>
           <h3 className="text-xl font-cinzel font-bold text-tavern-glow">{reason}</h3>
           <p className="text-xs text-tavern-parchment/70 mt-1">
@@ -101,11 +124,52 @@ export default function DiceRollerModal({ check, character, tacticalBonus, onRol
           </p>
         </div>
 
-        {/* Tumbling D20 Die Display with Shake Animation */}
-        <div className="flex flex-col items-center justify-center my-6 relative">
-          {/* Critical 20 Golden Particle Burst */}
+        {/* Advantage / Disadvantage Toggle */}
+        {!hasRolled && (
+          <div className="flex items-center justify-center gap-1.5 mb-4">
+            <button
+              onClick={() => { soundFx.playClick(); setRollMode('normal'); }}
+              disabled={isRolling}
+              className={`px-3 py-1 rounded-lg text-xs font-cinzel font-bold border transition-all ${
+                rollMode === 'normal'
+                  ? 'bg-tavern-gold text-stone-950 border-tavern-glow shadow-sm'
+                  : 'bg-tavern-darkest text-tavern-parchment/70 border-tavern-amber/40 hover:text-tavern-glow'
+              }`}
+            >
+              Normal (1d20)
+            </button>
+            <button
+              onClick={() => { soundFx.playClick(); setRollMode('advantage'); }}
+              disabled={isRolling}
+              className={`px-3 py-1 rounded-lg text-xs font-cinzel font-bold border flex items-center gap-1 transition-all ${
+                rollMode === 'advantage'
+                  ? 'bg-emerald-600 text-stone-950 border-emerald-400 shadow-sm'
+                  : 'bg-tavern-darkest text-emerald-400/80 border-emerald-800 hover:text-emerald-300'
+              }`}
+            >
+              <ArrowUpRight className="w-3.5 h-3.5" />
+              <span>Advantage (Take High)</span>
+            </button>
+            <button
+              onClick={() => { soundFx.playClick(); setRollMode('disadvantage'); }}
+              disabled={isRolling}
+              className={`px-3 py-1 rounded-lg text-xs font-cinzel font-bold border flex items-center gap-1 transition-all ${
+                rollMode === 'disadvantage'
+                  ? 'bg-red-700 text-stone-950 border-red-400 shadow-sm'
+                  : 'bg-tavern-darkest text-red-400/80 border-red-900 hover:text-red-300'
+              }`}
+            >
+              <ArrowDownRight className="w-3.5 h-3.5" />
+              <span>Disadvantage (Take Low)</span>
+            </button>
+          </div>
+        )}
+
+        {/* Tumbling Dice Stage */}
+        <div className="flex items-center justify-center gap-4 my-4 relative">
+          {/* Critical 20 Particle Burst */}
           {hasRolled && isCritSuccess && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30">
               {particles.map((p, idx) => (
                 <motion.div
                   key={idx}
@@ -116,7 +180,7 @@ export default function DiceRollerModal({ check, character, tacticalBonus, onRol
                     x: p.x,
                     y: p.y
                   }}
-                  transition={{ duration: 0.9, delay: p.delay, ease: 'easeOut' }}
+                  transition={{ duration: 1, delay: p.delay, ease: 'easeOut' }}
                   style={{ width: p.size, height: p.size }}
                   className="absolute rounded-full bg-gradient-to-r from-yellow-300 via-amber-400 to-tavern-glow shadow-[0_0_12px_#fde047]"
                 />
@@ -124,105 +188,138 @@ export default function DiceRollerModal({ check, character, tacticalBonus, onRol
             </div>
           )}
 
-          <div
-            className={`relative w-28 h-28 flex items-center justify-center rounded-2xl border-2 transition-all duration-300 ${
-              isRolling
-                ? 'animate-dice-shake border-tavern-glow shadow-candle bg-tavern-amber/30 scale-105'
-                : hasRolled
-                ? isSuccess
-                  ? 'border-emerald-500 bg-emerald-950/40 shadow-[0_0_25px_rgba(16,185,129,0.35)]'
-                  : 'border-tavern-crimson bg-red-950/40 shadow-[0_0_25px_rgba(220,38,38,0.35)]'
-                : 'border-tavern-gold/60 bg-tavern-darkest/70 hover:border-tavern-gold'
-            }`}
-          >
-            {/* D20 Polygon SVG Background */}
-            <svg className="absolute inset-0 w-full h-full p-2 opacity-30 pointer-events-none" viewBox="0 0 100 100">
-              <polygon points="50,5 95,25 95,75 50,95 5,75 5,25" fill="none" stroke="#d4a574" strokeWidth="2" />
-              <polygon points="50,5 50,95" fill="none" stroke="#d4a574" strokeWidth="1" />
-              <polygon points="5,25 95,75" fill="none" stroke="#d4a574" strokeWidth="1" />
-              <polygon points="5,75 95,25" fill="none" stroke="#d4a574" strokeWidth="1" />
-            </svg>
-
-            <span className={`text-4xl font-cinzel font-black tracking-tighter ${
-              hasRolled
-                ? isCritSuccess
-                  ? 'text-yellow-300 drop-shadow-[0_0_12px_rgba(253,224,71,0.8)] animate-pulse'
-                  : isCritFail
-                  ? 'text-red-500 drop-shadow-[0_0_12px_rgba(239,68,68,0.8)] animate-pulse'
-                  : isSuccess
-                  ? 'text-emerald-400'
-                  : 'text-red-400'
-                : 'text-tavern-gold'
-            }`}>
-              {d20Result !== null ? d20Result : '?'}
-            </span>
+          {/* Primary Die A */}
+          <div className="flex flex-col items-center">
+            {rollMode !== 'normal' && (
+              <span className="text-[10px] font-cinzel font-bold text-tavern-gold/80 mb-1">Die 1</span>
+            )}
+            <div
+              className={`relative w-24 h-24 sm:w-28 sm:h-28 flex items-center justify-center rounded-2xl border-2 transition-all duration-300 ${
+                isRolling
+                  ? 'animate-dice-shake border-tavern-glow bg-tavern-amber/30'
+                  : hasRolled
+                  ? d20ResultA === effectiveD20
+                    ? isSuccess
+                      ? 'border-emerald-400 bg-emerald-950/50 shadow-[0_0_20px_rgba(52,211,153,0.4)]'
+                      : 'border-red-500 bg-red-950/50 shadow-[0_0_20px_rgba(239,68,68,0.4)]'
+                    : 'border-stone-700 bg-stone-900/60 opacity-40'
+                  : 'border-tavern-gold/60 bg-tavern-darkest/70'
+              }`}
+            >
+              <span className="text-3xl sm:text-4xl font-cinzel font-black">
+                {d20ResultA !== null ? d20ResultA : '?'}
+              </span>
+            </div>
           </div>
 
-          {/* Math Breakdown */}
-          {hasRolled && (
-            <motion.div
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mt-4 text-center"
-            >
-              <div className="flex flex-wrap items-center justify-center gap-1.5 text-sm font-mono text-tavern-parchment/90">
-                <span className="text-tavern-gold font-bold">{d20Result} (D20)</span>
-                <span>+</span>
-                <span className="text-tavern-glow font-bold">{modStr} ({ability})</span>
-                {bonusNum > 0 && (
-                  <>
-                    <span>+</span>
-                    <span className="text-amber-300 font-bold">+{bonusNum} ({tacticalBonus.companionName.split(' ')[0]}'s {tacticalBonus.skillName})</span>
-                  </>
-                )}
-                <span>=</span>
-                <span className="text-lg font-cinzel font-black text-tavern-parchment underline decoration-tavern-gold">
-                  {totalScore}
+          {/* Secondary Die B (Advantage / Disadvantage) */}
+          {rollMode !== 'normal' && (
+            <div className="flex flex-col items-center">
+              <span className="text-[10px] font-cinzel font-bold text-tavern-gold/80 mb-1">Die 2</span>
+              <div
+                className={`relative w-24 h-24 sm:w-28 sm:h-28 flex items-center justify-center rounded-2xl border-2 transition-all duration-300 ${
+                  isRolling
+                    ? 'animate-dice-shake border-tavern-glow bg-tavern-amber/30'
+                    : hasRolled
+                    ? d20ResultB === effectiveD20
+                      ? isSuccess
+                        ? 'border-emerald-400 bg-emerald-950/50 shadow-[0_0_20px_rgba(52,211,153,0.4)]'
+                        : 'border-red-500 bg-red-950/50 shadow-[0_0_20px_rgba(239,68,68,0.4)]'
+                      : 'border-stone-700 bg-stone-900/60 opacity-40'
+                    : 'border-tavern-gold/60 bg-tavern-darkest/70'
+                }`}
+              >
+                <span className="text-3xl sm:text-4xl font-cinzel font-black">
+                  {d20ResultB !== null ? d20ResultB : '?'}
                 </span>
-                <span className="text-xs text-tavern-parchment/60 font-sans">vs DC {dc}</span>
               </div>
-
-              {/* Outcome Badge */}
-              <div className="mt-2 flex items-center justify-center gap-1.5 font-cinzel text-sm font-bold">
-                {isCritSuccess ? (
-                  <span className="text-yellow-300 flex items-center gap-1">
-                    <Sparkles className="w-4 h-4" /> Natural 20! Critical Triumph!
-                  </span>
-                ) : isCritFail ? (
-                  <span className="text-red-500 flex items-center gap-1">
-                    <AlertCircle className="w-4 h-4" /> Natural 1! Critical Fumble!
-                  </span>
-                ) : isSuccess ? (
-                  <span className="text-emerald-400 flex items-center gap-1">
-                    <CheckCircle2 className="w-4 h-4" /> Success! (DC {dc} Beaten)
-                  </span>
-                ) : (
-                  <span className="text-red-400 flex items-center gap-1">
-                    <XCircle className="w-4 h-4" /> Check Failed (Needed {dc})
-                  </span>
-                )}
-              </div>
-            </motion.div>
+            </div>
           )}
         </div>
 
-        {/* Action Controls */}
-        <div className="flex items-center justify-end gap-3 pt-4 border-t border-tavern-amber/40">
+        {/* Modifier & Math Breakdown */}
+        <div className="bg-tavern-darkest/90 border border-tavern-amber/40 rounded-xl p-3 mb-5">
+          <div className="flex items-center justify-around text-center text-xs font-cinzel">
+            <div>
+              <span className="text-tavern-parchment/60 block text-[10px]">Chosen Die</span>
+              <span className="font-bold text-tavern-gold text-base">{effectiveD20 !== null ? effectiveD20 : '—'}</span>
+            </div>
+            <span className="text-tavern-gold/50 text-base">+</span>
+            <div>
+              <span className="text-tavern-parchment/60 block text-[10px]">{ability} Mod</span>
+              <span className="font-bold text-tavern-parchment text-base">{modNum >= 0 ? `+${modNum}` : modNum}</span>
+            </div>
+            {bonusNum > 0 && (
+              <>
+                <span className="text-tavern-gold/50 text-base">+</span>
+                <div>
+                  <span className="text-tavern-parchment/60 block text-[10px]">Assist</span>
+                  <span className="font-bold text-tavern-glow text-base">+{bonusNum}</span>
+                </div>
+              </>
+            )}
+            <span className="text-tavern-gold/50 text-base">=</span>
+            <div>
+              <span className="text-tavern-parchment/60 block text-[10px]">Total Score</span>
+              <span className={`font-bold text-lg ${
+                hasRolled
+                  ? isSuccess ? 'text-emerald-400' : 'text-red-400'
+                  : 'text-tavern-parchment'
+              }`}>
+                {totalScore !== null ? totalScore : '—'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Outcome Banner */}
+        {hasRolled && (
+          <div className={`p-3 rounded-xl mb-4 text-center font-cinzel font-bold border ${
+            isCritSuccess
+              ? 'bg-yellow-950/80 border-yellow-400 text-yellow-300'
+              : isCritFail
+              ? 'bg-red-950/90 border-red-500 text-red-300'
+              : isSuccess
+              ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300'
+              : 'bg-red-950/80 border-red-600 text-red-300'
+          }`}>
+            {isCritSuccess
+              ? '🌟 NATURAL 20! CRITICAL SUCCESS!'
+              : isCritFail
+              ? '💀 NATURAL 1! CRITICAL DISASTER!'
+              : isSuccess
+              ? `⚔️ SUCCESS! (Rolled ${totalScore} vs DC ${dc})`
+              : `🛡️ FAILURE! (Rolled ${totalScore} vs DC ${dc})`}
+          </div>
+        )}
+
+        {/* Action Buttons */}
+        <div className="flex items-center gap-3">
           {!hasRolled ? (
             <button
               onClick={handleRoll}
               disabled={isRolling}
-              className="w-full py-3 px-6 rounded-lg bg-gradient-to-r from-tavern-amber via-tavern-gold to-tavern-glow text-tavern-darkest font-cinzel font-bold text-base shadow-candle hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
+              className="flex-1 py-3 rounded-xl bg-gradient-to-r from-tavern-amber to-tavern-gold text-tavern-darkest font-cinzel font-bold text-sm shadow-candle hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
             >
-              <Dices className="w-5 h-5" />
-              <span>{isRolling ? 'Tumbling the Dice...' : 'Roll the D20'}</span>
+              <Dices className="w-4 h-4" />
+              <span>{isRolling ? 'Rolling D20s...' : `Roll ${rollMode.toUpperCase()} Check`}</span>
             </button>
           ) : (
             <button
               onClick={handleConfirm}
-              className="w-full py-3 px-6 rounded-lg bg-tavern-gold text-tavern-darkest font-cinzel font-bold text-base shadow-candle hover:bg-tavern-glow active:scale-95 transition-all"
+              className="flex-1 py-3 rounded-xl bg-gradient-to-r from-tavern-amber to-tavern-gold text-tavern-darkest font-cinzel font-bold text-sm shadow-candle hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
             >
-              Continue Narration →
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Confirm & Advance Tale</span>
+            </button>
+          )}
+
+          {onCancel && !isRolling && !hasRolled && (
+            <button
+              onClick={onCancel}
+              className="px-4 py-3 rounded-xl bg-stone-900 border border-tavern-amber/30 text-stone-300 hover:text-stone-100 font-cinzel text-xs"
+            >
+              Cancel
             </button>
           )}
         </div>

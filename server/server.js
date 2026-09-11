@@ -140,6 +140,27 @@ app.get('/api/dnd/search', async (req, res) => {
   }
 });
 
+import { getLorebook, resetLorebook } from './services/lorebookService.js';
+
+// Lorebook / World Codex Endpoints
+app.get('/api/lorebook', (req, res) => {
+  res.json({ entries: getLorebook() });
+});
+
+app.post('/api/lorebook/reset', (req, res) => {
+  res.json({ entries: resetLorebook() });
+});
+
+// TTS Endpoint Proxy (Web Speech API is client-side default; this endpoint serves as proxy/status)
+app.post('/api/tts', (req, res) => {
+  const { text } = req.body;
+  res.json({
+    status: 'ok',
+    mode: 'browser-webspeech-native',
+    length: text ? text.length : 0
+  });
+});
+
 // Story Chronicle Intelligent Summarizer Endpoint
 app.post('/api/dm/summarize', async (req, res) => {
   try {
@@ -156,3 +177,4 @@ app.listen(PORT, () => {
   const hasKey = Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'YOUR_GEMINI_API_KEY');
   console.log(`🗡️ Engine status: ${hasKey ? 'Live Gemini 2.5 Flash Engine' : 'Offline Smart Simulation Engine'}`);
 });
+

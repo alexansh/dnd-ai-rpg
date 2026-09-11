@@ -130,8 +130,43 @@ export default function CampRestModal({ isOpen, onClose, party = [], onTakeRest,
               })
             )}
 
-            {/* Rest Actions */}
+            {/* Rest & Camp Actions */}
             <div className="pt-3 border-t border-amber-900/30 space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => {
+                    soundFx.playClick();
+                    soundFx.playSuccess(false);
+                    if (onTakeRest) onTakeRest('short');
+                    setApprovalToast({
+                      title: 'Hearty Rations Cooked',
+                      desc: '+5 Temporary Vitality granted to entire party.'
+                    });
+                    setTimeout(() => setApprovalToast(null), 3000);
+                  }}
+                  className="py-2 px-2.5 rounded-lg bg-stone-900 hover:bg-stone-800 border border-stone-700 hover:border-amber-500/50 text-[11px] font-cinzel font-bold text-amber-200 flex items-center justify-center gap-1.5 transition-all"
+                >
+                  <Flame className="w-3.5 h-3.5 text-orange-400" />
+                  <span>Cook Rations (+5 HP)</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    soundFx.playClick();
+                    soundFx.triggerSting('stealth_whisper');
+                    setApprovalToast({
+                      title: 'Camp Watch Established',
+                      desc: 'Night perimeter secured; ambushes averted.'
+                    });
+                    setTimeout(() => setApprovalToast(null), 3000);
+                  }}
+                  className="py-2 px-2.5 rounded-lg bg-stone-900 hover:bg-stone-800 border border-stone-700 hover:border-blue-500/50 text-[11px] font-cinzel font-bold text-blue-200 flex items-center justify-center gap-1.5 transition-all"
+                >
+                  <Shield className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Keep Watch</span>
+                </button>
+              </div>
+
               <button
                 onClick={() => handleRest('short')}
                 className="w-full py-2.5 px-3 rounded-lg bg-stone-900 hover:bg-stone-800 border border-stone-700 hover:border-amber-500/50 text-xs font-cinzel font-bold text-stone-200 flex items-center justify-center gap-2 transition-all"

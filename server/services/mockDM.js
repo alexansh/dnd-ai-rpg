@@ -1,10 +1,11 @@
 import { advanceWorldState } from './storyEngine.js';
+import { matchAndInjectLore, registerNewCodexEntries } from './lorebookService.js';
 
 export function generateMockTurn({
   character,
   companions = [],
   action,
-  actionType,
+  actionType = 'do',
   quest,
   location,
   checkResult,
@@ -17,6 +18,9 @@ export function generateMockTurn({
   const turnIndex = history.filter(h => h.role === 'user').length;
   const companion1 = companions[0] || { name: 'Sister Thalia', class: 'Cleric' };
   const companion2 = companions[1] || { name: 'Grimjaw', class: 'Warrior' };
+
+  // Trigger lorebook keyword matching
+  matchAndInjectLore(`${action} ${location} ${quest?.title || ''}`);
 
   // Handle dice check resolution
   if (checkResult) {
