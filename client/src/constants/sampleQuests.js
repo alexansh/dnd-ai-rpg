@@ -1,0 +1,122 @@
+export const SAMPLE_QUESTS = [
+  {
+    id: 'goblin-cellar',
+    title: 'Trouble in the Cellar',
+    tag: 'Bounty',
+    difficulty: 'Novice',
+    rewardGold: 45,
+    rewardItem: 'Minor Potion of Fortitude',
+    location: 'The Forgotten Cellars Beneath the Tavern',
+    sceneType: 'crypt',
+    description: 'Barkeep Barnaby reports strange chittering and smashed ale casks beneath the tavern floorboards. Clear the vermin and discover where they broke through.',
+    initialNarration: 'You light a pitch-pine torch and descend the creaking wooden cellar stairs behind the tavern bar. The smell of spilled barley wine and damp earth fills the cool subterranean air. Ahead, shattered casks litter the cobblestones, and several pairs of beady yellow eyes glint from behind a crumbling foundation wall.'
+  },
+  {
+    id: 'whispering-woods',
+    title: 'The Howling Grove',
+    tag: 'Exploration',
+    difficulty: 'Adept',
+    rewardGold: 80,
+    rewardItem: 'Ranger’s Silver Brooch',
+    location: 'The Whispering Woods',
+    sceneType: 'forest',
+    description: 'Woodcutters have abandoned the eastern trail after ghostly blue lanterns were spotted hovering near the ancient standing stones. Investigate the anomaly.',
+    initialNarration: 'Night descends over the Whispering Woods as mist curls around the gnarled roots of ancient oak trees. In the distance, floating blue wisps illuminate three colossal runic monoliths chanting with a low, unearthly hum.'
+  },
+  {
+    id: 'sunken-crypt',
+    title: 'The Crypt of the Pale Knight',
+    tag: 'Dungeon Crawl',
+    difficulty: 'Challenging',
+    rewardGold: 120,
+    rewardItem: 'Sunstone Amulet',
+    location: 'The Sunken Crypt of Oakhaven',
+    sceneType: 'crypt',
+    description: 'A collapsed tomb on the moor has exposed the resting place of Sir Kenneth the Undaunted. Recover his lost seal before grave robbers desecrate the vault.',
+    initialNarration: 'Cold mountain rain pours down as you stand at the mouth of the sunken crypt. Heavy iron-banded doors hang half-open upon rusted hinges, revealing waterlogged stone steps descending into sepulchral gloom.'
+  },
+  {
+    id: 'smugglers-cove',
+    title: 'The Black Dagger Cache',
+    tag: 'Mystery & Infiltration',
+    difficulty: 'Adept',
+    rewardGold: 95,
+    rewardItem: 'Shadowweave Cloak',
+    location: 'Smuggler’s Cove Caves',
+    sceneType: 'cove',
+    description: 'A hooded patron in the corner whispered of a rogue shipment of volatile alchemical fire hidden in the sea caves. Intercept or secure the contraband.',
+    initialNarration: 'The thunderous roar of crashing waves echoes through the sea cavern as tide waters lick at your boots. Lantern light flickers from a moored skiff ahead, where two armed brigands check the seals on iron-bound powder kegs.'
+  },
+  {
+    id: 'dragons-lair',
+    title: 'Dragon’s Lair Assault',
+    tag: 'Boss Raid',
+    difficulty: 'Deadly',
+    rewardGold: 220,
+    rewardItem: 'Dragonscale Shield of Cinders',
+    location: 'The Obsidian Caldera',
+    sceneType: 'mountains',
+    description: 'A young red drake has claimed the volcanic peak of Mount Cinder. Slay the beast or drive it from the realm before it reduces the surrounding valley to ashes.',
+    initialNarration: 'Sulfur stings your throat as waves of blistering heat roll down the basalt canyon. Above the magma vents, colossal obsidian ribs form an amphitheater where a serpentine silhouette coils over mounds of molten gold.'
+  },
+  {
+    id: 'merchants-dilemma',
+    title: 'The Merchant’s Dilemma',
+    tag: 'Social & Mystery',
+    difficulty: 'Novice',
+    rewardGold: 60,
+    rewardItem: 'Silver Signet of Trade',
+    location: 'Oakhaven Marketplace Square',
+    sceneType: 'village',
+    description: 'A wealthy silk merchant was swindled out of an ancient family deed. Interrogate suspects in the village square and negotiate the document’s peaceful return.',
+    initialNarration: 'The colorful marketplace bustles with peddlers, shouting heralds, and aromatic spices. Near the fountain, a distraught merchant in velvet robes gestures frantically toward a cluster of shady gamblers by the apothecary stall.'
+  },
+  {
+    id: 'plague-ward',
+    title: 'The Plague Ward of Oakhaven',
+    tag: 'Investigation',
+    difficulty: 'Adept',
+    rewardGold: 90,
+    rewardItem: 'Alchemist’s Cleansing Draught',
+    location: 'The Old Sanctum Infirmium',
+    sceneType: 'castle',
+    description: 'A mystical affliction is causing villagers to fall into a waking nightmare. Find the corrupted wellspring deep inside the old sanctum before the fever spreads.',
+    initialNarration: 'Pungent incense smoke hangs thick in the vaulted corridors of the old sanctum. Pale glyphs painted in dried sage flicker faintly along the doorframes as strained moans echo from the darkened cloister ahead.'
+  },
+  {
+    id: 'arena-champions',
+    title: 'The Arena of the Crimson Sun',
+    tag: 'Gladiatorial Combat',
+    difficulty: 'Challenging',
+    rewardGold: 140,
+    rewardItem: 'Champion’s Gilded Pauldrons',
+    location: 'The Grand Colosseum Sands',
+    sceneType: 'arena',
+    description: 'A visiting warlord has challenged any tavern sellswords to survive three rounds of combat against exotic beasts in the crimson arena.',
+    initialNarration: 'The roar of thousands of spectators reverberates through the heavy portcullis gates. As iron gears grind the gate upward, blinding desert sunlight washes over blood-stained sands and the snarls of caged manticores.'
+  },
+  {
+    id: 'fey-crossing',
+    title: 'The Fey Crossing',
+    tag: 'Otherworldly Exploration',
+    difficulty: 'Adept',
+    rewardGold: 105,
+    rewardItem: 'Moonlit Feather Cloak',
+    location: 'The Shimmering Veil of the Feywild',
+    sceneType: 'feywilds',
+    description: 'A rift between the mortal realm and the Feywild has opened in the forest marsh. Close the portal or appease the capricious woodland spirits.',
+    initialNarration: 'Colors invert as you cross the threshold: the grass glows with bioluminescent turquoise and floating violet flowers chime like silver bells in the sweet breeze. A satyr playing a bone flute steps out from a mirror-like pond.'
+  },
+  {
+    id: 'siege-of-ashford',
+    title: 'The Siege of Ashford Keep',
+    tag: 'Large-Scale Battle',
+    difficulty: 'Deadly',
+    rewardGold: 200,
+    rewardItem: 'Banner of the Valiant Vanguard',
+    location: 'The Outer Ramparts of Ashford',
+    sceneType: 'castle',
+    description: 'An army of corrupted hobgoblins has encircled the citadel. Reinforce the battlements, repel the siege engines, and hold the line until dawn.',
+    initialNarration: 'War horns blast through the midnight storm as flaming catapult boulders arc across the blackened sky. Along the crenellations, bloodied knights brace their shields against swarming scaling ladders.'
+  }
+];

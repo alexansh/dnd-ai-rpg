@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600" width="100%" height="100%">
+  <defs>
+    <radialGradient id="bgGrad" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#3b1747" stop-opacity="0.9" />
+      <stop offset="50%" stop-color="#1a0821" stop-opacity="0.95" />
+      <stop offset="100%" stop-color="#0b0604" />
+    </radialGradient>
+    <linearGradient id="goldBorder" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f0c987" />
+      <stop offset="50%" stop-color="#d4a574" />
+      <stop offset="100%" stop-color="#8a5a2e" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="600" height="600" fill="url(#bgGrad)" />
+
+  <!-- Ambient Light Circle -->
+  <circle cx="300" cy="270" r="180" fill="#f0c987" opacity="0.12" filter="url(#glow)" />
+  <circle cx="300" cy="270" r="110" fill="#3b1747" opacity="0.25" filter="url(#glow)" />
+
+  <!-- Outer Frame -->
+  <rect x="18" y="18" width="564" height="564" rx="16" fill="none" stroke="url(#goldBorder)" stroke-width="4" />
+  <rect x="28" y="28" width="544" height="544" rx="12" fill="none" stroke="#683e1e" stroke-width="1.5" stroke-dasharray="8,6" />
+
+  <!-- Corner Flourishes -->
+  <polygon points="18,18 48,18 18,48" fill="url(#goldBorder)" />
+  <polygon points="582,18 552,18 582,48" fill="url(#goldBorder)" />
+  <polygon points="18,582 48,582 18,552" fill="url(#goldBorder)" />
+  <polygon points="582,582 552,582 582,552" fill="url(#goldBorder)" />
+
+  <!-- Central Icon Emblem Badge -->
+  <g transform="translate(300, 260) scale(1.8)">
+    <circle cx="0" cy="0" r="46" fill="#140804" stroke="url(#goldBorder)" stroke-width="2" />
+    <g transform="translate(-24, -24)">
+      <path d="M8 8H20C24 8 24 12 24 12C24 12 24 8 28 8H40V40H28C24 40 24 36 24 36C24 36 24 40 20 40H8V8Z" fill="#3a1b0e" stroke="#f0c987" stroke-width="2"/>
+    </g>
+  </g>
+
+  <!-- Category Tag Banner -->
+  <rect x="200" y="430" width="200" height="26" rx="13" fill="#1a0c06" stroke="url(#goldBorder)" stroke-width="1.5" />
+  <text x="300" y="447" text-anchor="middle" fill="#f0c987" font-family="Cinzel, Georgia, serif" font-size="11" font-weight="bold" letter-spacing="2">
+    SCENERY
+  </text>
+
+  <!-- Title Banner -->
+  <rect x="60" y="475" width="480" height="50" rx="8" fill="#140804" stroke="url(#goldBorder)" stroke-width="2" />
+  <text x="300" y="506" text-anchor="middle" fill="#f0c987" font-family="Cinzel, Georgia, serif" font-size="18" font-weight="bold" letter-spacing="1">
+    Shimmering Fey Realm
+  </text>
+  <text x="300" y="545" text-anchor="middle" fill="#d4a574" opacity="0.8" font-family="system-ui, sans-serif" font-size="12">Astral Starlight</text>
+</svg>

@@ -1,0 +1,86 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #0e0704;
+    color: #ede0c8;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+  }
+  
+  h1, h2, h3, h4, .font-cinzel {
+    font-family: 'Cinzel', serif;
+    letter-spacing: 0.04em;
+  }
+}
+
+/* Custom Medieval Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #1a0f0a;
+}
+::-webkit-scrollbar-thumb {
+  background: #4a2a1b;
+  border-radius: 4px;
+  border: 1px solid #6b3e24;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #8a4b1e;
+}
+
+/* Parchment panel styling */
+.parchment-panel {
+  background: radial-gradient(circle at 50% 30%, #ede0c8 0%, #dfcdb0 70%, #ccb493 100%);
+  color: #2b1810;
+  border: 2px solid #8a5a2e;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), inset 0 0 30px rgba(138, 75, 30, 0.2);
+}
+
+.wood-panel {
+  background: linear-gradient(180deg, #2b1810 0%, #1c0f0a 100%);
+  border: 1px solid #4a2d1d;
+  box-shadow: inset 0 1px 0 rgba(240, 201, 135, 0.15), 0 8px 24px rgba(0, 0, 0, 0.6);
+}
+
+.golden-border {
+  border: 1px solid #8a5a2e;
+  box-shadow: 0 0 10px rgba(212, 165, 116, 0.2);
+}
+
+/* Atmospheric candlelight overlay */
+.candle-glow-bg {
+  background: radial-gradient(circle at 50% -20%, rgba(240, 201, 135, 0.18) 0%, rgba(138, 75, 30, 0.05) 50%, transparent 80%);
+}
+
+/* Dice Shake Keyframes */
+@keyframes diceShake {
+  0% { transform: translate3d(0, 0, 0) rotate(0deg); }
+  20% { transform: translate3d(-3px, 2px, 0) rotate(-6deg); }
+  40% { transform: translate3d(3px, -2px, 0) rotate(6deg); }
+  60% { transform: translate3d(-2px, -1px, 0) rotate(-4deg); }
+  80% { transform: translate3d(2px, 3px, 0) rotate(4deg); }
+  100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+}
+
+.animate-dice-shake {
+  animation: diceShake 0.15s ease-in-out infinite;
+}
+
+/* Red Flash on Critical 1 */
+.screen-red-flash {
+  box-shadow: inset 0 0 80px rgba(220, 38, 38, 0.6) !important;
+}
+
+/* Accessibility: Prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
