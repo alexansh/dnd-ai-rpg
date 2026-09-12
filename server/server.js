@@ -390,8 +390,8 @@ app.post('/api/dm/narrate', async (req, res) => {
 // Character Portrait Generation Endpoint (Permanent Content-Addressed)
 app.post('/api/dm/generate-portrait', async (req, res) => {
   try {
-    const { characterClass, description } = req.body;
-    const result = await generatePortrait({ characterClass, description });
+    const { race, characterClass, description, forceNew, variation } = req.body;
+    const result = await generatePortrait({ race, characterClass, description, forceNew, variation });
     res.json(result);
   } catch (error) {
     console.error('Error handling /api/dm/generate-portrait:', error);

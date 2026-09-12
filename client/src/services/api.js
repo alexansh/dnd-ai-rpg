@@ -70,7 +70,13 @@ export async function narrateAction({
   }
 }
 
-export async function generateCharacterPortrait({ characterClass, description }) {
+export async function generateCharacterPortrait({
+  race = 'Human',
+  characterClass = 'Warrior',
+  description = '',
+  forceNew = false,
+  variation = null
+}) {
   try {
     const authHeaders = await getAuthHeaders();
     const res = await fetch('/api/dm/generate-portrait', {
@@ -79,7 +85,7 @@ export async function generateCharacterPortrait({ characterClass, description })
         'Content-Type': 'application/json',
         ...authHeaders
       },
-      body: JSON.stringify({ characterClass, description })
+      body: JSON.stringify({ race, characterClass, description, forceNew, variation })
     });
 
     if (!res.ok) throw new Error('Failed to generate portrait');

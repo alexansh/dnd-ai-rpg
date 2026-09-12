@@ -107,21 +107,25 @@ export default function CharacterCreationScreen() {
     creationMode === 'archetype' ? activeArchetype.name : `${activeRace.name} ${activeClass.name}`;
 
   // Portrait Generator Function
-  const triggerGeneratePortrait = async (classNameToUse, descToUse) => {
+  const triggerGeneratePortrait = async (classNameToUse, descToUse, raceToUse, forceNew = false) => {
     setIsGeneratingPortrait(true);
     try {
-      const fullClass =
-        creationMode === 'archetype'
-          ? activeArchetype.name
-          : `${activeRace.name} ${activeClass.name}`;
-      const charClass = classNameToUse || fullClass;
+      const raceVal = raceToUse || (creationMode === 'archetype' ? 'Human' : activeRace.name);
+      const classVal = classNameToUse || (creationMode === 'archetype' ? activeArchetype.name : activeClass.name);
       const desc = (descToUse !== undefined ? descToUse : appearance).trim();
+      const variation = forceNew ? Date.now() : null;
+
       const res = await generateCharacterPortrait({
-        characterClass: charClass,
-        description: desc
+        race: raceVal,
+        characterClass: classVal,
+        description: desc,
+        forceNew,
+        variation
       });
-      if (res && res.imageUrl) {
-        setPortraitUrl(res.imageUrl);
+      if (res && (res.imageUrl || res.fallbackUrl)) {
+        const urlToUse = res.imageUrl || res.fallbackUrl;
+        const finalUrl = forceNew ? `${urlToUse}?v=${Date.now()}` : urlToUse;
+        setPortraitUrl(finalUrl);
         setArtGeneratedTime(Date.now());
         soundFx.playSuccess(false);
       }
@@ -134,7 +138,7 @@ export default function CharacterCreationScreen() {
 
   // Initial portrait generation
   useEffect(() => {
-    triggerGeneratePortrait(activeArchetype.name, appearance);
+    triggerGeneratePortrait(activeArchetype.name, appearance, 'Human');
   }, []);
 
   // Randomize Hero Name
@@ -157,14 +161,14 @@ export default function CharacterCreationScreen() {
       setBackstory(
         'A former castle sentinel who laid down their post after a fateful encounter in the shadowwoods, now seeking redemption and coin at The Wayward Flagon.'
       );
-      triggerGeneratePortrait(activeArchetype.name, activeArchetype.defaultAppearance);
+      triggerGeneratePortrait(activeArchetype.name, activeArchetype.defaultAppearance, 'Human', true);
     } else {
       setName(generateRandomHeroName(selectedRaceId, selectedClassId));
       const dynamicDesc = getDynamicAppearance(selectedRaceId, selectedClassId);
       const dynamicStory = getDynamicBackstory(selectedRaceId, selectedClassId);
       setAppearance(dynamicDesc);
       setBackstory(dynamicStory);
-      triggerGeneratePortrait(`${activeRace.name} ${activeClass.name}`, dynamicDesc);
+      triggerGeneratePortrait(activeClass.name, dynamicDesc, activeRace.name, true);
     }
   };
 
@@ -174,7 +178,7 @@ export default function CharacterCreationScreen() {
     setSelectedArchetypeId(arch.id);
     setName(generateRandomHeroName('human', arch.name));
     setAppearance(arch.defaultAppearance);
-    triggerGeneratePortrait(arch.name, arch.defaultAppearance);
+    triggerGeneratePortrait(arch.name, arch.defaultAppearance, 'Human', true);
   };
 
   // Race Select Handler (Custom Mode)
@@ -186,7 +190,7 @@ export default function CharacterCreationScreen() {
     const dynamicStory = getDynamicBackstory(race.id, selectedClassId);
     setAppearance(dynamicDesc);
     setBackstory(dynamicStory);
-    triggerGeneratePortrait(`${race.name} ${activeClass.name}`, dynamicDesc);
+    triggerGeneratePortrait(activeClass.name, dynamicDesc, race.name, true);
   };
 
   // Class Select Handler (Custom Mode)
@@ -197,7 +201,7 @@ export default function CharacterCreationScreen() {
     const dynamicStory = getDynamicBackstory(selectedRaceId, cls.id);
     setAppearance(dynamicDesc);
     setBackstory(dynamicStory);
-    triggerGeneratePortrait(`${activeRace.name} ${cls.name}`, dynamicDesc);
+    triggerGeneratePortrait(cls.name, dynamicDesc, activeRace.name, true);
   };
 
   // Stat Adjust Handlers (5e Point-Buy)
@@ -248,8 +252,10 @@ export default function CharacterCreationScreen() {
     const randomDesc = RANDOM_APPEARANCES[Math.floor(Math.random() * RANDOM_APPEARANCES.length)];
     setAppearance(randomDesc);
     triggerGeneratePortrait(
-      creationMode === 'archetype' ? activeArchetype.name : `${activeRace.name} ${activeClass.name}`,
-      randomDesc
+      creationMode === 'archetype' ? activeArchetype.name : activeClass.name,
+      randomDesc,
+      creationMode === 'archetype' ? 'Human' : activeRace.name,
+      true
     );
   };
 
@@ -260,12 +266,14 @@ export default function CharacterCreationScreen() {
     setBackstory(randomStory);
   };
 
-  // Manual Art Render Click
+  // Manual Art Render Click ("Render Art")
   const handleManualRender = () => {
     soundFx.playClick();
     triggerGeneratePortrait(
-      creationMode === 'archetype' ? activeArchetype.name : `${activeRace.name} ${activeClass.name}`,
-      appearance
+      creationMode === 'archetype' ? activeArchetype.name : activeClass.name,
+      appearance,
+      creationMode === 'archetype' ? 'Human' : activeRace.name,
+      true
     );
   };
 
@@ -691,7 +699,8 @@ export default function CharacterCreationScreen() {
             <div className="flex flex-col items-center text-center space-y-2.5">
               <PortraitDisplay
                 portraitUrl={portraitUrl}
-                characterClass={characterClassName}
+                race={creationMode === 'archetype' ? 'Human' : activeRace.name}
+                characterClass={creationMode === 'archetype' ? activeArchetype.name : activeClass.name}
                 name={name}
                 size="lg"
                 isLoading={isGeneratingPortrait}

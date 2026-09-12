@@ -142,7 +142,7 @@ export async function fetchAndStoreRemoteImage(assetId, remoteUrl, { type = 'por
   try {
     const response = await fetch(remoteUrl, {
       headers: { 'User-Agent': 'WaywardFlagon-AssetPipeline/2.0' },
-      signal: AbortSignal.timeout(15000)
+      signal: AbortSignal.timeout(7000)
     });
 
     if (!response.ok) {

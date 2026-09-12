@@ -153,6 +153,35 @@ describe('Phase 2: Permanent Asset Pipeline & Deterministic Caching', () => {
     assert.strictEqual(result2.assetId, result1.assetId, 'AssetId must match');
   });
 
+  test('generatePortrait: forceNew generates distinct assetId and rerolls seed', async () => {
+    const result1 = await generatePortrait({
+      characterClass: 'Rogue',
+      description: 'Sneaky shadowblade in midnight cowl'
+    });
+
+    const result2 = await generatePortrait({
+      characterClass: 'Rogue',
+      description: 'Sneaky shadowblade in midnight cowl',
+      forceNew: true,
+      variation: Date.now() + 100
+    });
+
+    assert.ok(result1.assetId, 'First call returns assetId');
+    assert.ok(result2.assetId, 'Reroll call returns assetId');
+    assert.notStrictEqual(result1.assetId, result2.assetId, 'forceNew must generate a new distinct assetId');
+  });
+
+  test('generatePortrait: incorporates racial descriptors into prompt', async () => {
+    const result = await generatePortrait({
+      race: 'Tiefling',
+      characterClass: 'Warlock',
+      description: 'Ember-eyed sorcerer'
+    });
+
+    assert.ok(result.promptUsed.includes('Tiefling'), 'Prompt must contain Tiefling traits');
+    assert.ok(result.promptUsed.includes('ram horns'), 'Prompt must include ram horn anatomy');
+  });
+
   test('generateSceneImage: produces consistent output and caches idempotently', async () => {
     const result1 = await generateSceneImage({
       sceneDescription: 'Grand dining hall with lit chandeliers',
