@@ -25,3 +25,7 @@ pnpm-debug.log*
 
 # Temporary & Log files
 *.log
+
+# Local mock database & asset cache
+.data/
+server/.data/

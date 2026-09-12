@@ -1,4 +1,6 @@
-const STYLE_SUFFIX = 'warm firelit fantasy portrait, painterly digital art, high quality character concept art, muted amber and umber palette, dramatic rim lighting, tavern candlelight glow';
+import { computeAssetHash, deriveSeedFromHash, getAsset, storeAssetBuffer, fetchAndStoreRemoteImage } from './assetRegistry.js';
+
+const STYLE_SUFFIX = 'warm firelit fantasy portrait, painterly digital art, muted amber and umber palette, dramatic rim lighting, tavern candlelight glow';
 
 // SVG Palette colors matching theme
 const CLASS_ICONS = {
@@ -86,18 +88,33 @@ export function generateFallbackPortraitSvg(characterClass = 'Warrior', descript
   </svg>
   `.trim();
 
-  // Return reliable Base64 Data URI
   const base64 = Buffer.from(svg).toString('base64');
   return `data:image/svg+xml;base64,${base64}`;
 }
 
 export async function generatePortrait({ characterClass = 'Warrior', description = '' }) {
   const charDesc = (description || 'Intrepid adventurer').trim();
-  const prompt = `${charDesc}, ${characterClass} fantasy adventurer, D&D character portrait, masterpiece, highly detailed face and eyes, dramatic rim lighting, tavern candlelight glow, high quality digital concept art`;
-  const apiKey = process.env.GEMINI_API_KEY;
+  // Shared style-suffix string adhering strictly to GEMINI.md user rule
+  const prompt = `${charDesc}, ${characterClass} adventurer, ${STYLE_SUFFIX}`;
   const localFallbackUrl = getLocalArchetypeFallback(characterClass);
 
-  // 1. If Gemini API key is configured, attempt official Imagen 3 API
+  // 1. Content-addressed identity check
+  const assetId = computeAssetHash('portrait', prompt, { characterClass });
+  const cachedAsset = await getAsset(assetId);
+  if (cachedAsset) {
+    return {
+      imageUrl: cachedAsset.url,
+      fallbackUrl: localFallbackUrl,
+      promptUsed: prompt,
+      isFallback: false,
+      assetId,
+      cached: true
+    };
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY;
+
+  // 2. If Gemini API key is configured, attempt official Imagen 3 API
   if (apiKey && apiKey.trim() !== '' && apiKey !== 'YOUR_GEMINI_API_KEY') {
     try {
       const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`, {
@@ -113,11 +130,18 @@ export async function generatePortrait({ characterClass = 'Warrior', description
         const data = await res.json();
         const b64 = data.predictions?.[0]?.bytesBase64Encoded;
         if (b64) {
+          const buffer = Buffer.from(b64, 'base64');
+          const stored = await storeAssetBuffer(assetId, buffer, {
+            type: 'portrait',
+            prompt,
+            metadata: { characterClass, provider: 'imagen-3' }
+          });
           return {
-            imageUrl: `data:image/jpeg;base64,${b64}`,
+            imageUrl: stored.url,
             fallbackUrl: localFallbackUrl,
             promptUsed: prompt,
-            isFallback: false
+            isFallback: false,
+            assetId
           };
         }
       }
@@ -126,24 +150,31 @@ export async function generatePortrait({ characterClass = 'Warrior', description
     }
   }
 
-  // 2. Generate live AI character art via Pollinations AI (free, instant, no key needed)
+  // 3. Generate live AI character art via Pollinations AI with deterministic seed
   try {
-    const randomSeed = Math.floor(Math.random() * 1000000);
+    const seed = deriveSeedFromHash(assetId);
     const cleanPrompt = prompt.replace(/[^\w\s,.-]/gi, ' ').replace(/\s+/g, ' ').trim();
     const encodedPrompt = encodeURIComponent(cleanPrompt);
-    const aiImageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=512&height=512&nologo=true&seed=${randomSeed}&model=flux&enhance=true`;
+    const aiImageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=512&height=512&nologo=true&seed=${seed}&model=flux&enhance=true`;
+
+    const stored = await fetchAndStoreRemoteImage(assetId, aiImageUrl, {
+      type: 'portrait',
+      prompt,
+      metadata: { characterClass, seed, provider: 'pollinations' }
+    });
 
     return {
-      imageUrl: aiImageUrl,
+      imageUrl: stored.url,
       fallbackUrl: localFallbackUrl,
       promptUsed: prompt,
-      isFallback: false
+      isFallback: false,
+      assetId
     };
   } catch (err) {
-    console.warn('[Image Engine] Fallback to local image/SVG:', err);
+    console.warn('[Image Engine] Pollinations fetch/store failed, falling back to local procedural SVG:', err.message);
   }
 
-  // 3. Graceful offline fallback
+  // 4. Graceful offline fallback
   return {
     imageUrl: localFallbackUrl || generateFallbackPortraitSvg(characterClass, description),
     fallbackUrl: localFallbackUrl,
@@ -151,4 +182,3 @@ export async function generatePortrait({ characterClass = 'Warrior', description
     isFallback: true
   };
 }
-

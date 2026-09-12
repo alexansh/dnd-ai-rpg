@@ -5,7 +5,14 @@ import { CAMPAIGN_PRESETS } from '../constants/campaigns';
 import { COMPANIONS_POOL, getComplementaryCompanions } from '../constants/companions';
 import { soundFx } from '../services/audio';
 import { voiceEngine } from '../services/voiceEngine';
-import { fetchLorebook } from '../services/api';
+import {
+  fetchLorebook,
+  fetchUserSessions,
+  fetchSessionById,
+  saveGameSession,
+  autosaveGameSession,
+  deleteGameSession
+} from '../services/api';
 
 const STORAGE_KEY = 'wayward_flagon_save_v2';
 const CUSTOM_QUESTS_KEY = 'wayward_flagon_custom_quests';
@@ -188,7 +195,30 @@ export function GameProvider({ children }) {
     });
   };
 
-  const saveGame = (customChar = null, customCompanions = null, customScreen = null) => {
+  const [sessionId, setSessionId] = useState(() => {
+    try {
+      return localStorage.getItem('wayward_flagon_active_session_id') || null;
+    } catch {
+      return null;
+    }
+  });
+  const [savedSessions, setSavedSessions] = useState([]);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const refreshSessions = async () => {
+    try {
+      const list = await fetchUserSessions();
+      setSavedSessions(list);
+    } catch (e) {
+      console.warn('Failed to refresh saved sessions:', e);
+    }
+  };
+
+  useEffect(() => {
+    refreshSessions();
+  }, []);
+
+  const saveGame = async (customChar = null, customCompanions = null, customScreen = null) => {
     try {
       const charToSave = customChar || character;
       if (!charToSave) return;
@@ -207,38 +237,109 @@ export function GameProvider({ children }) {
         completedQuests,
         codexEntries,
         currentScreen: customScreen || currentScreen,
+        activeMonsters,
+        turnOrder,
+        currentCombatTurn,
+        combatPosition,
         lastSaved: new Date().toISOString()
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+
+      setIsSaving(true);
+      const res = await saveGameSession(sessionId, data);
+      if (res && res.id) {
+        setSessionId(res.id);
+        localStorage.setItem('wayward_flagon_active_session_id', res.id);
+      }
+      setIsSaving(false);
+      refreshSessions();
+      return true;
     } catch (e) {
       console.error('Failed to save game:', e);
+      setIsSaving(false);
+      return false;
     }
   };
 
-  const loadGame = () => {
+  const triggerAutosave = async (overrideData = {}) => {
+    if (!character) return;
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const data = JSON.parse(saved);
-        if (data.character) {
-          setCharacter(data.character);
-          setCompanions(data.companions || getComplementaryCompanions(data.character.class));
-          if (data.activeCampaign) setActiveCampaign(data.activeCampaign);
-          if (data.activeWorldNode) setActiveWorldNode(data.activeWorldNode);
-          setActiveQuest(data.activeQuest || null);
-          setCurrentLocation(data.currentLocation || 'The Wayward Flagon Tavern');
-          setCurrentSceneKey(data.currentSceneKey || 'tavern');
-          setAdventureLog(data.adventureLog || []);
-          setStorySummary(data.storySummary || '');
-          setTurnCount(data.turnCount || 0);
-          setWorldState(data.worldState || { questStage: 1, totalStages: 4, flags: {} });
-          setCompletedQuests(data.completedQuests || []);
-          if (data.codexEntries) setCodexEntries(data.codexEntries);
-          setCurrentScreen(data.currentScreen === 'create' ? 'tavern' : (data.currentScreen || 'tavern'));
+      const payload = {
+        character,
+        companions,
+        activeCampaign,
+        activeWorldNode,
+        activeQuest,
+        currentLocation,
+        currentSceneKey,
+        adventureLog,
+        storySummary,
+        turnCount,
+        worldState,
+        completedQuests,
+        codexEntries,
+        currentScreen,
+        activeMonsters,
+        turnOrder,
+        currentCombatTurn,
+        combatPosition,
+        ...overrideData
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      const res = await autosaveGameSession(sessionId, payload);
+      if (res && res.id && !sessionId) {
+        setSessionId(res.id);
+        localStorage.setItem('wayward_flagon_active_session_id', res.id);
+      }
+    } catch (err) {
+      console.warn('Autosave background sync deferred:', err);
+    }
+  };
 
-          soundFx.setMood(data.currentScreen === 'adventure' ? (data.activeCampaign?.initialMood || 'exploration_wonder') : 'tavern_calm');
-          return true;
+  const loadGame = async (targetSessionId = null) => {
+    try {
+      const idToLoad = targetSessionId || sessionId || localStorage.getItem('wayward_flagon_active_session_id');
+      let data = null;
+
+      if (idToLoad) {
+        data = await fetchSessionById(idToLoad);
+      }
+
+      if (!data) {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          data = JSON.parse(saved);
         }
+      }
+
+      if (data && data.character) {
+        if (data.id) {
+          setSessionId(data.id);
+          localStorage.setItem('wayward_flagon_active_session_id', data.id);
+        }
+        setCharacter(data.character);
+        setCompanions(data.companions || getComplementaryCompanions(data.character.class));
+        if (data.activeCampaign) setActiveCampaign(data.activeCampaign);
+        if (data.activeWorldNode) setActiveWorldNode(data.activeWorldNode);
+        setActiveQuest(data.activeQuest || null);
+        setCurrentLocation(data.currentLocation || 'The Wayward Flagon Tavern');
+        setCurrentSceneKey(data.currentSceneKey || 'tavern');
+        setAdventureLog(data.adventureLog || []);
+        setStorySummary(data.storySummary || '');
+        setTurnCount(data.turnCount || 0);
+        setWorldState(data.worldState || { questStage: 1, totalStages: 4, flags: {} });
+        setCompletedQuests(data.completedQuests || []);
+        if (data.codexEntries) setCodexEntries(data.codexEntries);
+        if (data.activeMonsters) setActiveMonsters(data.activeMonsters);
+        if (data.turnOrder) setTurnOrder(data.turnOrder);
+        if (typeof data.currentCombatTurn === 'number') setCurrentCombatTurn(data.currentCombatTurn);
+        if (data.combatPosition) setCombatPosition(data.combatPosition);
+
+        const targetScreen = data.currentScreen === 'create' ? 'tavern' : (data.currentScreen || 'tavern');
+        setCurrentScreen(targetScreen);
+
+        soundFx.setMood(targetScreen === 'adventure' ? (data.activeCampaign?.initialMood || 'exploration_wonder') : 'tavern_calm');
+        return true;
       }
     } catch (e) {
       console.error('Failed to load game:', e);
@@ -248,6 +349,7 @@ export function GameProvider({ children }) {
 
   const hasSaveGame = () => {
     try {
+      if (savedSessions.length > 0) return true;
       const saved = localStorage.getItem(STORAGE_KEY);
       if (!saved) return false;
       const data = JSON.parse(saved);
@@ -258,6 +360,10 @@ export function GameProvider({ children }) {
   };
 
   const startNewGame = () => {
+    setSessionId(null);
+    try {
+      localStorage.removeItem('wayward_flagon_active_session_id');
+    } catch {}
     setCharacter(null);
     setCompanions([]);
     setActiveCampaign(CAMPAIGN_PRESETS[0]);
@@ -642,6 +748,12 @@ export function GameProvider({ children }) {
         loadGame,
         hasSaveGame,
         startNewGame,
+        sessionId,
+        savedSessions,
+        isSaving,
+        refreshSessions,
+        triggerAutosave,
+        deleteSession: deleteGameSession,
         returnToTavern,
         launchCampaign: launchWorldCampaign,
         launchWorldCampaign,

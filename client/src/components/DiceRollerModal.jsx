@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Dices, Sparkles, CheckCircle2, XCircle, Flame, Shield, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { soundFx } from '../services/audio';
 import { getStatModifier } from '../constants/archetypes';
+import { rollAuthoritativeDice } from '../services/api';
 
 export default function DiceRollerModal({ check, character, tacticalBonus, onRollComplete, onCancel }) {
   const [rollMode, setRollMode] = useState('normal'); // 'normal' | 'advantage' | 'disadvantage'
@@ -45,36 +46,49 @@ export default function DiceRollerModal({ check, character, tacticalBonus, onRol
     };
   });
 
-  const handleRoll = () => {
+  const handleRoll = async () => {
     if (isRolling) return;
     setIsRolling(true);
     soundFx.playDiceRoll();
 
+    let notation = '1d20';
+    if (rollMode === 'advantage') notation = '2d20kh1';
+    if (rollMode === 'disadvantage') notation = '2d20kl1';
+
+    // Request authoritative roll from server
+    const serverRollPromise = rollAuthoritativeDice(notation, { modifier: modNum + bonusNum });
+
     let iterations = 0;
-    const interval = setInterval(() => {
+    const interval = setInterval(async () => {
       setD20ResultA(Math.floor(Math.random() * 20) + 1);
       if (rollMode !== 'normal') {
         setD20ResultB(Math.floor(Math.random() * 20) + 1);
       }
       iterations++;
-      if (iterations > 14) {
+      if (iterations > 12) {
         clearInterval(interval);
-        const finalA = Math.floor(Math.random() * 20) + 1;
-        const finalB = Math.floor(Math.random() * 20) + 1;
-        setD20ResultA(finalA);
-        setD20ResultB(finalB);
-        setIsRolling(false);
-        setHasRolled(true);
+        try {
+          const serverResult = await serverRollPromise;
+          const finalA = serverResult.rolls?.[0] || Math.floor(Math.random() * 20) + 1;
+          const finalB = serverResult.rolls?.[1] || Math.floor(Math.random() * 20) + 1;
+          setD20ResultA(finalA);
+          setD20ResultB(finalB);
+          setIsRolling(false);
+          setHasRolled(true);
 
-        const chosen = rollMode === 'advantage' ? Math.max(finalA, finalB) : rollMode === 'disadvantage' ? Math.min(finalA, finalB) : finalA;
-        const total = chosen + modNum + bonusNum;
+          const chosen = rollMode === 'advantage' ? Math.max(finalA, finalB) : rollMode === 'disadvantage' ? Math.min(finalA, finalB) : finalA;
+          const total = chosen + modNum + bonusNum;
 
-        if (chosen === 20 || total >= dc) {
-          soundFx.playSuccess(chosen === 20);
-          if (chosen === 20) soundFx.triggerSting('victory_fanfare');
-        } else {
-          soundFx.playFailure();
-          if (chosen === 1) soundFx.triggerSting('sword_clash');
+          if (chosen === 20 || total >= dc) {
+            soundFx.playSuccess(chosen === 20);
+            if (chosen === 20) soundFx.triggerSting('victory_fanfare');
+          } else {
+            soundFx.playFailure();
+            if (chosen === 1) soundFx.triggerSting('sword_clash');
+          }
+        } catch {
+          setIsRolling(false);
+          setHasRolled(true);
         }
       }
     }, 80);

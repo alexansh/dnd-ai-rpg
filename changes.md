@@ -1,4 +1,4 @@
-﻿# System Changelog
+# System Changelog
 
 ### 2026-09-12 — Phase 0: Repository Audit & Architectural Documentation
 - **Files Created**:
@@ -15,3 +15,51 @@
 - **Code Modifications**:
   - Preserved all working application code in `client/` and `server/`.
   - Audited dependencies, routes, state management, and assets.
+
+### 2026-09-12 — Phases 1 Through 10: Production Implementation & Engine Overhaul
+- **Phase 1: Firebase Auth & Cloud Persistence**:
+  - Created `server/services/sessionManager.js`: CRUD session manager (`createSession`, `saveSession`, `autosaveSession`, `loadSession`, `listSessions`, `deleteSession`).
+  - Created `server/services/localFirestoreMock.js`: file-based atomic JSON storage at `.data/firestore/`.
+  - Created `server/services/firebaseAdmin.js`: dual-mode Firebase Admin SDK / local fallback loader.
+  - Created `server/middleware/auth.js`: Firebase token verification with persistent guest UUID fallback.
+  - Created `client/src/services/firebase.js`: client Firebase Web SDK init with guest fallback.
+  - Created `firestore.rules`, `storage.rules`, `firebase.json`: security rules and emulator suite config.
+  - Updated `client/src/services/api.js`: added session endpoints and authentication headers.
+  - Updated `client/src/context/GameContext.jsx`: dual-layer persistence (localStorage + cloud session manager).
+  - Updated `client/src/screens/TitleScreen.jsx`: added Chronicles Library modal for multi-slot saves.
+- **Phase 2: Permanent Asset Pipeline & Image Persistence**:
+  - Created `server/services/assetRegistry.js`: SHA-256 prompt hashing, deterministic seed derivation, binary disk/bucket caching.
+  - Refactored `server/services/imageAdapter.js`: content-addressed caching, permanent local URL delivery (`/api/assets/<hash>.jpg`).
+  - Refactored `server/services/sceneImageAdapter.js`: replaced volatile in-memory cache with `assetRegistry.js`, added `getLocalSceneFallback`.
+- **Phase 3: Server-Authoritative Deterministic Rules Engine**:
+  - Created `server/services/rulesEngine.js`: cryptographic PRNG dice (`rollDie`, `executeDiceRoll`), 5e modifier math, ability checks, combat attack resolution vs AC, short/long rest mechanics.
+  - Mounted `/api/rules/roll`, `/api/rules/check`, `/api/rules/combat/attack`, `/api/rules/rest` in `server/server.js`.
+  - Updated `client/src/components/DiceRollerModal.jsx`: connected physical/visual dice tumble to authoritative server results.
+- **Phase 4: Persistent World Engine & NPC Simulation**:
+  - Created `server/services/eventBus.js`: central decoupled game event dispatcher (`eventBus`).
+  - Created `server/services/npcSimulation.js`: persistent NPC entities, daily schedules, structured memories, knowledge boundaries.
+  - Created `server/services/worldEngine.js`: day/night cycles, dynamic weather, interactive world objects (chests, cages, sarcophagi), faction reputation tracking.
+  - Mounted `/api/world/advance-time`, `/api/world/interact`, `/api/world/npcs`, `/api/world/npc/:id` in `server/server.js`.
+- **Phase 5: Companion System & Social Phases**:
+  - Created `server/services/companionEngine.js`: dual-axis loyalty meters (-100 to 100), five loyalty tiers, breaking point mutiny triggers at $\le -70$, ethical trigger matrix, companion combat AI.
+  - Mounted `/api/companion/evaluate-choice`, `/api/companion/combat-action` in `server/server.js`.
+- **Phase 6: Campaign Library, Quest Engine & Story Director**:
+  - Created `server/services/questEngine.js`: multi-stage hierarchical objectives, rewards, world consequences.
+  - Created `server/services/storyDirector.js`: pacing evaluator, Three-Act campaign progression evaluator, anti-spoiler guidance.
+  - Mounted `/api/quest/start`, `/api/quest/advance-objective`, `/api/quest/fail`, `/api/director/guidance`, `/api/director/act-transition` in `server/server.js`.
+- **Phase 7: AI DM Tool Calling & Prompt Injection Defense**:
+  - Created `server/services/aiTools.js`: function definitions (`roll_dice`, `skill_check`, `attack_enemy`, `interact_object`), `executeAiTool`, `sanitizePlayerInput`, `buildSafePromptSections`.
+- **Phase 8: Tactical World & Visual Combat Map**:
+  - Created `client/src/components/TacticalCombatGrid.jsx`: 2D battlefield positioning, line of sight, cover bonuses (+2 AC / +5 AC), explosive hazard barrels, targeting and movement range.
+- **Phase 9: Presentation & Audio Polish**:
+  - Verified Web Audio API procedural sound effects in `client/src/services/audio.js` and server dice settlement animation in `DiceRollerModal.jsx`.
+- **Phase 10: Testing, Hardening & Documentation**:
+  - Created automated test suites in `server/tests/`:
+    - `persistence_and_assets.test.js` (Phases 1 & 2)
+    - `rules.test.js` (Phase 3)
+    - `world.test.js` (Phase 4)
+    - `companions.test.js` (Phase 5)
+    - `campaign_and_quest.test.js` (Phase 6)
+    - `ai_tools.test.js` (Phase 7)
+  - Configured `npm test` in `server/package.json` and root `package.json`.
+  - Created `docs/PRODUCTION_READINESS_REPORT.md`.
