@@ -292,9 +292,13 @@ export const COMPANIONS_POOL = [
 ];
 
 export function getApprovalRating(approvalScore = 50) {
-  if (approvalScore >= 76) return { label: 'Devoted Ally', color: 'text-amber-300 border-amber-400', icon: '🌟' };
-  if (approvalScore >= 26) return { label: 'Loyal Companion', color: 'text-emerald-400 border-emerald-500', icon: '🛡️' };
-  return { label: 'Distrustful', color: 'text-red-400 border-red-500', icon: '⚠️' };
+  // Support -100..+100 loyalty scale (or legacy 0..100)
+  const score = approvalScore;
+  if (score >= 70) return { label: 'Devoted Ally', tier: 'DEVOTED', color: 'text-amber-300 border-amber-400 bg-amber-950/40', icon: '🌟' };
+  if (score >= 25) return { label: 'Loyal Companion', tier: 'LOYAL', color: 'text-emerald-400 border-emerald-500 bg-emerald-950/40', icon: '🛡️' };
+  if (score >= -24) return { label: 'Neutral', tier: 'NEUTRAL', color: 'text-stone-300 border-stone-600 bg-stone-900/50', icon: '⚖️' };
+  if (score >= -69) return { label: 'Distrustful', tier: 'DISTRUSTFUL', color: 'text-orange-400 border-orange-500 bg-orange-950/50', icon: '⚠️' };
+  return { label: 'Breaking Point', tier: 'HOSTILE', color: 'text-red-400 border-red-500 bg-red-950/70 animate-pulse', icon: '💥' };
 }
 
 export function getComplementaryCompanions(playerClass = 'Warrior') {

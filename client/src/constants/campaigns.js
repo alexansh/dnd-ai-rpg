@@ -1,4 +1,7 @@
+import { WHISPERING_CROSSROADS_CAMPAIGN } from './campaigns/whisperingCrossroads';
+
 export const CAMPAIGN_PRESETS = [
+  WHISPERING_CROSSROADS_CAMPAIGN,
   {
     id: 'shadowfell_crypt',
     title: 'The Shadowfell Crypt Incursion',

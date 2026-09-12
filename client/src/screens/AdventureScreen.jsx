@@ -3,9 +3,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Shield, Home, Dices, Flame, Sparkles, MapPin, Award, ArrowLeft, Coins, Gift, Eye, Compass, UserPlus, Heart, Swords, BookOpen, Package, Layers } from 'lucide-react';
 import NarrativeLog from '../components/NarrativeLog';
 import QuickActionChips from '../components/QuickActionChips';
+import DecisionMatrix from '../components/DecisionMatrix';
 import CharacterSheet from '../components/CharacterSheet';
 import PartyBar from '../components/PartyBar';
 import SceneIllustration from '../components/SceneIllustration';
+import Scene2DView from '../components/Scene2DView';
 import WorldMap2D from '../components/WorldMap2D';
 import DungeonNodeMap from '../components/DungeonNodeMap';
 import EncounterBar from '../components/EncounterBar';
@@ -14,6 +16,7 @@ import CampRestModal from '../components/CampRestModal';
 import CodexModal from '../components/CodexModal';
 import LootCardModal from '../components/LootCardModal';
 import { narrateAction, generateSceneIllustration, fetchMonsterData } from '../services/api';
+import { applyDeterministicStateMutation } from '../services/deterministicRunner';
 import { SCENES } from '../constants/scenes';
 import { COMPANIONS_POOL } from '../constants/companions';
 import { useGame } from '../context/GameContext';
@@ -83,11 +86,21 @@ export default function AdventureScreen() {
 
   const sceneData = SCENES[currentSceneKey] || SCENES.crypt;
 
-  // Active Hotspots for Current Location
-  const activeHotspots = activeCampaign?.hotspots || [
-    { id: 'ancient_chest', label: 'Rune-Carved Chest', type: 'chest', check: 'DEX', dc: 12, inspect: 'Heavy iron chest with ancient seals.' },
-    { id: 'glowing_altar', label: 'Eldritch Altar', type: 'altar', check: 'INT', dc: 13, inspect: 'Pulsing arcane glyphs carved into granite.' }
-  ];
+  // Active Scene Node from active campaign or fallback
+  const currentNode = activeWorldNode || activeCampaign?.nodes?.[0] || activeCampaign?.startingNodes?.[0] || {
+    id: 'current_scene',
+    title: currentLocation || 'The Road Ahead',
+    act: 1,
+    description: activeQuest?.description || 'You stand ready on the frontier of adventure.',
+    lightingMood: currentMood,
+    hotspots: activeCampaign?.hotspots || [
+      { id: 'ancient_chest', label: 'Rune-Carved Chest', type: 'chest', check: 'DEX', dc: 12, inspect: 'Heavy iron chest with ancient seals.' },
+      { id: 'glowing_altar', label: 'Eldritch Altar', type: 'altar', check: 'INT', dc: 13, inspect: 'Pulsing arcane glyphs carved into granite.' }
+    ],
+    choices: []
+  };
+
+  const activeHotspots = currentNode?.hotspots || activeCampaign?.hotspots || [];
 
   const triggerToast = (text, type = 'loot') => {
     setToastNotification({ text, type, id: Date.now() });
@@ -315,10 +328,162 @@ export default function AdventureScreen() {
     }
   };
 
+  // Deterministic Choice Selection Handler
+  const handleSelectDeterministicChoice = (choice) => {
+    if (isLoading || pendingCheck) return;
+
+    if (choice.check) {
+      setPendingCheck({
+        ...choice.check,
+        choiceData: choice,
+        playerAction: choice.text
+      });
+      return;
+    }
+
+    executeChoiceOutcome(choice, null);
+  };
+
+  // Deterministic Choice Mutation Executor
+  const executeChoiceOutcome = async (choice, rollOutcome) => {
+    pushHistorySnapshot();
+    setLastActionSent({ actionText: choice.text, actionType: 'do' });
+
+    const isSuccess = rollOutcome ? rollOutcome.isSuccess : true;
+    const activeMutation = isSuccess
+      ? (choice.successMutation || choice.mutation || {})
+      : (choice.failureMutation || choice.mutation || {});
+
+    // Apply pure deterministic state transitions
+    const nextState = applyDeterministicStateMutation({
+      character,
+      companions,
+      flags: worldState?.flags ? Object.keys(worldState.flags) : [],
+      moralityScore: character.moralityScore || 0
+    }, activeMutation);
+
+    setCharacter(nextState.character);
+    setCompanions(nextState.companions);
+
+    const updatedFlags = { ...(worldState.flags || {}) };
+    (nextState.flags || []).forEach(f => { updatedFlags[f] = true; });
+    setWorldState(prev => ({
+      ...prev,
+      flags: updatedFlags,
+      questStage: choice.targetNodeId ? (prev.questStage || 1) + 1 : (prev.questStage || 1)
+    }));
+
+    if (nextState.breakingCompanions && nextState.breakingCompanions.length > 0) {
+      nextState.breakingCompanions.forEach(c => {
+        triggerToast(`⚠️ ${c.name} has reached a breaking point!`, 'damage');
+      });
+    }
+
+    if (activeMutation.loyaltyDeltas) {
+      Object.entries(activeMutation.loyaltyDeltas).forEach(([id, delta]) => {
+        const comp = companions.find(c => c.id === id || c.name === id);
+        const name = comp?.name || id;
+        triggerToast(`${name} ${delta > 0 ? `Approves (+${delta})` : `Disapproves (${delta})`}`, delta > 0 ? 'approval' : 'damage');
+      });
+    }
+
+    let nextNode = null;
+    if (choice.targetNodeId && activeCampaign?.nodes) {
+      nextNode = activeCampaign.nodes.find(n => n.id === choice.targetNodeId);
+      if (nextNode) {
+        setActiveWorldNode(nextNode);
+        setCurrentLocation(nextNode.title || nextNode.name);
+      }
+    }
+
+    setIsLoading(true);
+    try {
+      const outcomeText = rollOutcome
+        ? `[Action: "${choice.text}" - Rolled ${rollOutcome.total} vs DC ${rollOutcome.dc} (${isSuccess ? 'SUCCESS' : 'FAILURE'})]`
+        : `[Player Choice: "${choice.text}"]`;
+
+      const response = await narrateAction({
+        character: nextState.character,
+        companions: nextState.companions,
+        action: outcomeText,
+        actionType: 'do',
+        quest: activeQuest || { title: activeCampaign?.title || 'Expedition', location: currentLocation },
+        location: nextNode?.title || currentLocation,
+        checkResult: rollOutcome,
+        history: adventureLog.map(m => ({
+          role: m.role,
+          content: m.content,
+          companionName: m.companionName
+        })),
+        storySummary,
+        worldState: {
+          ...worldState,
+          flags: updatedFlags,
+          currentNodeId: choice.targetNodeId || activeWorldNode?.id
+        }
+      });
+
+      const userMsg = {
+        id: `user-${Date.now()}`,
+        role: 'user',
+        actionMode: 'do',
+        content: choice.text,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+
+      const dmMsg = {
+        id: `dm-${Date.now()}`,
+        role: 'dm',
+        content: response.narration || (isSuccess ? choice.resolution : choice.failureResolution) || 'The consequences ripple across your fellowship.',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+
+      const newLogs = [userMsg, dmMsg];
+
+      if (Array.isArray(response.companionActions)) {
+        response.companionActions.forEach((compAct, idx) => {
+          const compData = nextState.companions.find(c => c.name === compAct.name) || nextState.companions[idx] || { name: compAct.name, class: 'Ally', color: '#d4a574' };
+          newLogs.push({
+            id: `comp-${Date.now()}-${idx}`,
+            role: 'companion',
+            companionName: compAct.name,
+            companionClass: compData.class,
+            companionColor: compData.color,
+            content: compAct.action,
+            dialogue: compAct.dialogue,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          });
+        });
+      }
+
+      setAdventureLog(prev => [...prev, ...newLogs]);
+
+      if (voiceEngine.getEnabled() && dmMsg.content) {
+        voiceEngine.speak(dmMsg.content);
+      }
+
+      if (response.quickActions && response.quickActions.length > 0) {
+        setQuickActions(response.quickActions);
+      }
+
+      setTurnCount(prev => prev + 1);
+      saveGame(nextState.character, nextState.companions);
+    } catch (err) {
+      console.error('Narrative resolution error:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleRollComplete = (rollOutcome) => {
-    const actionIntent = pendingCheck?.playerAction || 'Skill Action';
+    const currentCheck = pendingCheck;
     setPendingCheck(null);
-    handlePlayerAction(actionIntent, 'check', rollOutcome);
+
+    if (currentCheck?.choiceData) {
+      executeChoiceOutcome(currentCheck.choiceData, rollOutcome);
+    } else {
+      handlePlayerAction(currentCheck?.playerAction || 'Skill Action', 'check', rollOutcome);
+    }
   };
 
   const handleRetryTurn = () => {
@@ -332,12 +497,20 @@ export default function AdventureScreen() {
   const handleHotspotClick = (spot) => {
     soundFx.playClick();
     soundFx.triggerSting('stealth_whisper');
-    handlePlayerAction(`I carefully approach and interact with the ${spot.label}. (${spot.inspect})`, 'do');
+    if (spot.check) {
+      setPendingCheck({
+        ability: spot.check,
+        dc: spot.dc || 12,
+        reason: `Inspect & interact with ${spot.label}`,
+        playerAction: `Inspect ${spot.label}: ${spot.inspect || ''}`
+      });
+    } else {
+      handlePlayerAction(`I carefully approach and interact with the ${spot.label}. (${spot.inspect})`, 'do');
+    }
   };
 
   const handleExecuteCombatAction = (actionDesc, type) => {
     handlePlayerAction(actionDesc, 'do');
-    // Cycle combat turn
     setCurrentCombatTurn(prev => (prev + 1) % Math.max(1, turnOrder.length));
   };
 
@@ -501,34 +674,16 @@ export default function AdventureScreen() {
                 locationName={currentLocation}
               />
             ) : (
-              /* 16:9 Dynamic Scene Illustration with Interactive Hotspots */
-              <div className="relative">
-                <SceneIllustration
-                  sceneImageUrl={sceneImageUrl}
-                  fallbackImageUrl={sceneData.imageUrl || sceneData.fallbackUrl}
-                  fallbackGradient={sceneData.bgGradient}
-                  location={currentLocation}
-                  mood={currentMood}
-                  isLoading={isSceneLoading}
-                />
-
-                {/* Hotspot Chips */}
-                <div className="absolute bottom-2.5 left-2.5 right-2.5 flex flex-wrap gap-2 z-10 pointer-events-auto">
-                  {activeHotspots.map((spot) => (
-                    <button
-                      key={spot.id}
-                      onClick={() => handleHotspotClick(spot)}
-                      className="px-2.5 py-1 rounded-lg bg-stone-950/85 hover:bg-stone-900 border border-tavern-gold/60 hover:border-tavern-glow text-[11px] font-cinzel font-bold text-tavern-glow flex items-center gap-1.5 shadow-candle backdrop-blur-md active:scale-95 transition-all"
-                    >
-                      <Eye className="w-3 h-3 text-tavern-gold" />
-                      <span>{spot.label}</span>
-                      <span className="text-[9px] px-1 rounded bg-stone-800 text-stone-300 font-mono">
-                        {spot.check}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
+              /* 2D Visual Scene Stage with Hotspots & Party Indicators */
+              <Scene2DView
+                node={currentNode}
+                sceneImageUrl={sceneImageUrl}
+                fallbackImageUrl={sceneData.imageUrl || sceneData.fallbackUrl}
+                party={companions}
+                player={character}
+                onHotspotClick={handleHotspotClick}
+                isLoading={isSceneLoading || isLoading}
+              />
             )}
 
             {/* Narrative Log Stream with Inline DM Editing */}
@@ -539,10 +694,14 @@ export default function AdventureScreen() {
               onEditMessage={(id, content) => editLogEntry(id, content)}
             />
 
-            {/* 3-Mode Do / Say / Story Action Bar with Director Undo / Retry */}
-            <QuickActionChips
-              onAction={(act, type) => handlePlayerAction(act, type)}
+            {/* Decision Matrix: Authored Choices + 3-Mode Freeform Input Bar + Director Undo/Retry */}
+            <DecisionMatrix
+              choices={currentNode?.choices || []}
+              companions={companions}
+              player={character}
               dynamicChips={quickActions}
+              onSelectChoice={handleSelectDeterministicChoice}
+              onFreeformAction={(act, type) => handlePlayerAction(act, type)}
               disabled={isLoading || Boolean(pendingCheck)}
               onUndo={undoLastTurn}
               onRetry={handleRetryTurn}

@@ -16,7 +16,7 @@ export default function PartyBar({ player, companions = [], onUseTacticalSkill, 
         </span>
 
         {/* 1. Player Card */}
-        <div className="shrink-0 flex items-center gap-2 bg-tavern-darkest/90 border border-tavern-gold/60 rounded-lg px-2.5 py-1.5 shadow-sm min-w-[140px] sm:min-w-[155px]">
+        <div className="shrink-0 flex items-center gap-2 bg-tavern-darkest/90 border border-tavern-gold/60 rounded-lg px-2.5 py-1.5 shadow-sm min-w-[145px] sm:min-w-[160px]">
           <PortraitDisplay
             portraitUrl={player.portraitUrl}
             characterClass={player.class}
@@ -27,7 +27,7 @@ export default function PartyBar({ player, companions = [], onUseTacticalSkill, 
             <div className="flex items-center justify-between gap-1">
               <span className="font-cinzel font-bold text-xs text-tavern-glow truncate">{player.name}</span>
               <span className="text-[9px] px-1 rounded bg-tavern-umber text-tavern-gold font-cinzel uppercase font-bold">
-                You
+                Hero
               </span>
             </div>
             <div className="flex items-center gap-1 text-[10px] text-tavern-parchment/70 font-mono mt-0.5">
@@ -47,14 +47,21 @@ export default function PartyBar({ player, companions = [], onUseTacticalSkill, 
         {companions.map((comp) => {
           const isFallen = comp.hp <= 0;
           const hpPercent = Math.max(0, Math.min(100, Math.round((comp.hp / comp.maxHp) * 100)));
-          const rating = getApprovalRating(comp.approval || 50);
+          const loyaltyScore = typeof comp.loyalty === 'number' ? comp.loyalty : (typeof comp.approval === 'number' ? comp.approval : 0);
+          const rating = getApprovalRating(loyaltyScore);
+          const isBreaking = rating.tier === 'HOSTILE' || loyaltyScore <= -70;
+
+          // Normalized loyalty percent for UI meter (-100..+100 -> 0..100%)
+          const loyaltyGaugePercent = Math.max(0, Math.min(100, Math.round(((loyaltyScore + 100) / 200) * 100)));
 
           return (
             <div
               key={comp.id}
-              className={`shrink-0 flex items-center gap-2 border rounded-lg px-2.5 py-1.5 shadow-sm min-w-[160px] sm:min-w-[185px] transition-all relative group ${
+              className={`shrink-0 flex items-center gap-2 border rounded-lg px-2.5 py-1.5 shadow-sm min-w-[170px] sm:min-w-[195px] transition-all relative group ${
                 isFallen
                   ? 'bg-stone-900/80 border-stone-700 opacity-60'
+                  : isBreaking
+                  ? 'bg-red-950/40 border-red-500/80 shadow-[0_0_12px_rgba(239,68,68,0.2)]'
                   : 'bg-tavern-darkest/75 border-tavern-amber/40 hover:border-tavern-gold/60'
               }`}
             >
@@ -75,13 +82,16 @@ export default function PartyBar({ player, companions = [], onUseTacticalSkill, 
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-1">
                   <span className="font-cinzel font-bold text-xs text-tavern-parchment truncate">{comp.name}</span>
-                  <span className={`text-[9px] px-1 rounded bg-stone-900/90 font-cinzel font-bold border border-stone-700 ${rating.color}`} title={`Approval: ${comp.approval || 50}/100`}>
+                  <span
+                    className={`text-[9px] px-1.5 py-0.5 rounded font-cinzel font-bold border ${rating.color}`}
+                    title={`Loyalty Score: ${loyaltyScore > 0 ? `+${loyaltyScore}` : loyaltyScore} / 100`}
+                  >
                     {rating.icon} {rating.label}
                   </span>
                 </div>
                 
                 <div className="flex items-center justify-between text-[10px] text-tavern-gold/80 font-cinzel mt-0.5">
-                  <span>{comp.class}</span>
+                  <span className="truncate max-w-[70px]">{comp.class}</span>
                   {isFallen ? (
                     <span className="text-red-400 font-bold">Fallen</span>
                   ) : (
@@ -89,11 +99,28 @@ export default function PartyBar({ player, companions = [], onUseTacticalSkill, 
                   )}
                 </div>
 
+                {/* HP Meter */}
                 <div className="w-full h-1.5 bg-stone-800 rounded-full overflow-hidden mt-1">
                   <div
                     className={`h-full ${isFallen ? 'bg-stone-600' : hpPercent > 50 ? 'bg-emerald-500' : 'bg-red-500'} transition-all duration-300`}
                     style={{ width: `${hpPercent}%` }}
                   />
+                </div>
+
+                {/* Loyalty Gauge Bar */}
+                <div className="w-full mt-1 flex items-center gap-1">
+                  <div className="flex-1 h-1 bg-stone-900 rounded-full overflow-hidden relative border border-stone-700/50">
+                    <div
+                      className={`h-full transition-all duration-300 ${
+                        loyaltyScore >= 25 ? 'bg-emerald-400' : loyaltyScore >= -24 ? 'bg-amber-400' : 'bg-red-500'
+                      }`}
+                      style={{ width: `${loyaltyGaugePercent}%` }}
+                    />
+                    <div className="absolute top-0 bottom-0 left-1/2 w-[1px] bg-stone-500/70" />
+                  </div>
+                  <span className="text-[8px] font-mono text-stone-400">
+                    {loyaltyScore >= 0 ? `+${loyaltyScore}` : loyaltyScore}
+                  </span>
                 </div>
 
                 {/* Tactical Skill Quick Button */}
