@@ -141,9 +141,10 @@ LATEST PLAYER INPUT (${actionType.toUpperCase()}):
 ${checkResult ? `[CHECK RESOLVED: ${checkResult.ability} total ${checkResult.total} vs DC ${checkResult.dc} - ${checkResult.isSuccess ? 'SUCCESS' : 'FAILURE'} (Crit: ${checkResult.isCritSuccess || checkResult.isCritFail}). Player original intent: "${action}"]` : `Action: "${action}"`}
 `;
 
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    const modelName = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
-    const res = await fetch(apiUrl, {
+    let res = await fetch(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -156,6 +157,24 @@ ${checkResult ? `[CHECK RESOLVED: ${checkResult.ability} total ${checkResult.tot
         }
       })
     });
+
+    // If 404 (model deprecated / changed), retry with gemini-flash-latest
+    if (res.status === 404 && modelName !== 'gemini-flash-latest') {
+      const fallbackUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`;
+      res = await fetch(fallbackUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          contents: [{ role: 'user', parts: [{ text: contextPrompt }] }],
+          generationConfig: {
+            responseMimeType: 'application/json',
+            temperature: 0.75,
+            maxOutputTokens: 950
+          }
+        })
+      });
+    }
 
     if (!res.ok) {
       console.warn(`[Gemini API] Returned status ${res.status}. Using simulation fallback.`);
@@ -215,8 +234,9 @@ Preserve key events, NPC names, discovered items, and current quest milestones. 
 Chronicle:
 ${combined}
 `;
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-    const res = await fetch(apiUrl, {
+    const modelName = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+    let res = await fetch(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -224,6 +244,18 @@ ${combined}
         generationConfig: { maxOutputTokens: 300, temperature: 0.3 }
       })
     });
+
+    if (res.status === 404 && modelName !== 'gemini-flash-latest') {
+      const fallbackUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`;
+      res = await fetch(fallbackUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { maxOutputTokens: 300, temperature: 0.3 }
+        })
+      });
+    }
 
     if (res.ok) {
       const data = await res.json();
