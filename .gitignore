@@ -1,11 +1,12 @@
 # Dependencies
 node_modules/
-client/node_modules/
-server/node_modules/
 
-# Build output
-client/dist/
+# Next.js build output
+.next/
+out/
 dist/
+tsconfig.tsbuildinfo
+next-env.d.ts
 
 # Environment variables & secrets
 .env
@@ -25,7 +26,4 @@ pnpm-debug.log*
 
 # Temporary & Log files
 *.log
-
-# Local mock database & asset cache
 .data/
-server/.data/
