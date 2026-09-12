@@ -816,6 +816,10 @@ export function GameProvider({ children }) {
     voiceEngine.setEnabled(next);
   };
 
+  const triggerAutosave = async () => {
+    return await saveCurrentSlot();
+  };
+
   return (
     <GameContext.Provider
       value={{

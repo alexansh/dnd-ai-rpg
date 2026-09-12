@@ -4,7 +4,7 @@ import { useGame } from '../context/GameContext';
 import { soundFx, musicEngine } from '../services/audio';
 
 export default function AudioPlayer() {
-  const { isAudioMuted, toggleAudio } = useGame();
+  const { isAudioMuted, toggleAudio, isVoiceEnabled, toggleVoiceNarration } = useGame();
   const [isOpen, setIsOpen] = useState(false);
   const [activeMood, setActiveMood] = useState('tavern_calm');
   const [intensity, setIntensity] = useState(2);
