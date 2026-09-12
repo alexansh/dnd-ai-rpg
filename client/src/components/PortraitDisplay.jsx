@@ -102,7 +102,7 @@ const getRaceClassFallback = (race = 'human', cls = 'Warrior') => {
     </text>
   </svg>`;
 
-  return `data:image/svg+xml;base64,${btoa(svg)}`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 };
 
 export default function PortraitDisplay({
