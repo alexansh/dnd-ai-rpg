@@ -3,7 +3,9 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useGame } from './context/GameContext';
 import AudioPlayer from './components/AudioPlayer';
 import TitleScreen from './screens/TitleScreen';
+import CharacterSelectScreen from './screens/CharacterSelectScreen';
 import CharacterCreationScreen from './screens/CharacterCreationScreen';
+import CampaignSelectScreen from './screens/CampaignSelectScreen';
 import WorldSelectionScreen from './screens/WorldSelectionScreen';
 import TavernHubScreen from './screens/TavernHubScreen';
 import AdventureScreen from './screens/AdventureScreen';
@@ -26,7 +28,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-tavern-darkest text-tavern-parchment font-body relative select-none overflow-x-hidden">
+    <div className="min-h-screen bg-[#0a0704] text-tavern-parchment font-body relative select-none overflow-x-hidden">
       {/* Global Ambient Tavern Audio & SFX Controller */}
       <AudioPlayer />
 
@@ -44,6 +46,18 @@ export default function App() {
             <TitleScreen />
           </motion.div>
         )}
+        {currentScreen === 'character_select' && (
+          <motion.div
+            key="character_select"
+            variants={screenVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+          >
+            <CharacterSelectScreen />
+          </motion.div>
+        )}
         {currentScreen === 'create' && (
           <motion.div
             key="create"
@@ -54,6 +68,18 @@ export default function App() {
             transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
           >
             <CharacterCreationScreen />
+          </motion.div>
+        )}
+        {currentScreen === 'campaign_select' && (
+          <motion.div
+            key="campaign_select"
+            variants={screenVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+          >
+            <CampaignSelectScreen />
           </motion.div>
         )}
         {currentScreen === 'world_select' && (

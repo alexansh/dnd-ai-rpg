@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Sparkles, Scroll, MessageSquare, DoorOpen, Flame, Heart, Coins, Shield, User, X, Check, Coffee, PlusCircle, BookOpen, Compass } from 'lucide-react';
+import { Sparkles, Scroll, MessageSquare, DoorOpen, Flame, Heart, Coins, Shield, User, Users, X, Check, Coffee, PlusCircle, BookOpen, Compass } from 'lucide-react';
 import HotspotTavernScene from '../components/HotspotTavernScene';
 import CharacterSheet from '../components/CharacterSheet';
 import CampaignGeneratorModal from '../components/CampaignGeneratorModal';
 import CampaignSelectorModal from '../components/CampaignSelectorModal';
 import VisualCompendiumModal from '../components/VisualCompendiumModal';
+import OrnatePanel from '../components/OrnatePanel';
 import { SAMPLE_QUESTS } from '../constants/sampleQuests';
 import { useGame } from '../context/GameContext';
 import { soundFx } from '../services/audio';
@@ -21,6 +22,7 @@ export default function TavernHubScreen() {
     completedQuests,
     launchQuest,
     saveGame,
+    saveCurrentSlot,
     setCurrentScreen
   } = useGame();
 
@@ -61,21 +63,38 @@ export default function TavernHubScreen() {
     setActiveModal(type);
   };
 
+  const handleExitToCharacterSelect = () => {
+    soundFx.playClick();
+    saveCurrentSlot(character, companions, 'tavern');
+    setCurrentScreen('character_select');
+  };
+
   return (
-    <div className="min-h-screen p-3 sm:p-6 candle-glow-bg flex flex-col justify-between">
+    <div className="min-h-screen p-3 sm:p-6 bg-[#0a0704] candle-glow-bg flex flex-col justify-between">
       <div className="max-w-7xl mx-auto w-full space-y-4">
         {/* Top Tavern Header & HUD */}
-        <div className="flex items-center justify-between bg-tavern-wood/90 border border-tavern-amber/50 rounded-xl px-4 py-3 shadow-candle">
-          <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center justify-between bg-black/45 backdrop-blur-xl border border-tavern-gold/25 rounded-2xl px-5 py-3 shadow-2xl">
+          <div className="flex items-center gap-3">
             <Flame className="w-5 h-5 text-tavern-glow animate-flicker" />
             <div>
               <h2 className="font-cinzel font-bold text-base sm:text-lg text-tavern-glow">The Wayward Flagon</h2>
-              <p className="text-[11px] text-tavern-parchment/70 font-sans hidden sm:block">Sanctuary of Adventurers, Bards & Sellswords</p>
+              <p className="text-[11px] text-tavern-parchment/60 font-sans hidden sm:block">Sanctuary of Adventurers, Bards & Sellswords</p>
             </div>
           </div>
 
           {/* Quick HUD */}
           <div className="flex items-center gap-3 sm:gap-5 text-xs font-cinzel">
+            {/* Hero Badge */}
+            <div className="flex items-center gap-2 bg-black/50 border border-tavern-gold/20 rounded-full py-1 px-3">
+              <img
+                src={character?.portraitUrl || '/assets/images/archetypes/warrior.jpg'}
+                alt={character?.name}
+                className="w-6 h-6 rounded-full object-cover border border-tavern-gold/50"
+                onError={(e) => { e.target.src = '/assets/images/archetypes/warrior.jpg'; }}
+              />
+              <span className="font-bold text-tavern-glow hidden sm:inline">{character?.name}</span>
+            </div>
+
             <div className="flex items-center gap-1.5 text-tavern-gold font-bold">
               <Coins className="w-4 h-4 text-tavern-glow" />
               <span>{character?.gold || 0}g</span>
@@ -84,11 +103,15 @@ export default function TavernHubScreen() {
               <Heart className="w-4 h-4 text-red-400 fill-red-400" />
               <span>{character?.hp}/{character?.maxHp} HP</span>
             </div>
+
+            {/* Switch Hero Button */}
             <button
-              onClick={() => { soundFx.playClick(); setCurrentScreen('title'); }}
-              className="text-[11px] px-2.5 py-1 rounded bg-tavern-umber/80 hover:bg-tavern-umber text-tavern-gold border border-tavern-amber/40 transition-colors"
+              onClick={handleExitToCharacterSelect}
+              title="Save & Return to Character Select"
+              className="text-xs px-3 py-1.5 rounded-xl bg-tavern-wood hover:bg-tavern-umber text-tavern-gold hover:text-tavern-glow border border-tavern-gold/30 hover:border-tavern-gold/60 font-cinzel font-bold flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
             >
-              Main Menu
+              <Users className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Heroes</span>
             </button>
           </div>
         </div>

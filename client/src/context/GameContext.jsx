@@ -14,9 +14,67 @@ import {
   deleteGameSession
 } from '../services/api';
 
+const SLOTS_KEY = 'wayward_flagon_slots_v2';
 const STORAGE_KEY = 'wayward_flagon_save_v2';
 const CUSTOM_QUESTS_KEY = 'wayward_flagon_custom_quests';
 const CODEX_KEY = 'wayward_flagon_codex';
+
+function loadInitialSlots() {
+  try {
+    const raw = localStorage.getItem(SLOTS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+
+    // Auto-migration from legacy single-slot save
+    const legacyRaw = localStorage.getItem('wayward_flagon_save_v2') || localStorage.getItem('wayward_flagon_save_v1');
+    if (legacyRaw) {
+      const legacy = JSON.parse(legacyRaw);
+      if (legacy && legacy.character) {
+        const migratedSlot = {
+          slotId: legacy.id || `slot_${Date.now()}`,
+          character: legacy.character,
+          campaign: legacy.activeCampaign || {
+            id: 'legacy-campaign',
+            title: 'The Wayward Chronicle',
+            theme: 'Adventure',
+            difficulty: 'Novice'
+          },
+          companions: legacy.companions || [],
+          activeQuest: legacy.activeQuest || null,
+          currentLocation: legacy.currentLocation || 'The Wayward Flagon Tavern',
+          currentSceneKey: legacy.currentSceneKey || 'tavern',
+          currentScreen: legacy.currentScreen === 'adventure' ? 'adventure' : 'tavern',
+          adventureLog: legacy.adventureLog || [],
+          storySummary: legacy.storySummary || '',
+          worldState: legacy.worldState || {
+            questStage: 1,
+            flags: {},
+            reputation: {},
+            discoveredClues: [],
+            storyBeat: 'EXPLORATION',
+            turnsSinceBanter: 0
+          },
+          turnCount: legacy.turnCount || 0,
+          completedQuests: legacy.completedQuests || [],
+          lastPlayed: legacy.lastSaved || new Date().toISOString(),
+          totalPlayTime: 0,
+          createdAt: legacy.createdAt || new Date().toISOString()
+        };
+        try {
+          localStorage.setItem(SLOTS_KEY, JSON.stringify([migratedSlot]));
+        } catch {}
+        return [migratedSlot];
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to parse save slots:', err);
+  }
+  return [];
+}
 
 const INITIAL_CODEX = [
   {
@@ -195,20 +253,31 @@ export function GameProvider({ children }) {
     });
   };
 
-  const [sessionId, setSessionId] = useState(() => {
-    try {
-      return localStorage.getItem('wayward_flagon_active_session_id') || null;
-    } catch {
-      return null;
-    }
-  });
-  const [savedSessions, setSavedSessions] = useState([]);
+  const [saveSlots, setSaveSlots] = useState(() => loadInitialSlots());
+  const [activeSlotId, setActiveSlotId] = useState(null);
+  const [pendingCharacter, setPendingCharacter] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
 
   const refreshSessions = async () => {
     try {
       const list = await fetchUserSessions();
-      setSavedSessions(list);
+      if (Array.isArray(list) && list.length > 0) {
+        // Merge cloud sessions with local slots
+        setSaveSlots(prev => {
+          const mergedMap = new Map();
+          list.forEach(item => {
+            if (item.id && item.character) {
+              mergedMap.set(item.id, { slotId: item.id, ...item });
+            }
+          });
+          prev.forEach(item => {
+            if (item.slotId) mergedMap.set(item.slotId, item);
+          });
+          const result = Array.from(mergedMap.values()).slice(0, 5);
+          localStorage.setItem(SLOTS_KEY, JSON.stringify(result));
+          return result;
+        });
+      }
     } catch (e) {
       console.warn('Failed to refresh saved sessions:', e);
     }
@@ -218,169 +287,229 @@ export function GameProvider({ children }) {
     refreshSessions();
   }, []);
 
-  const saveGame = async (customChar = null, customCompanions = null, customScreen = null) => {
+  const saveCurrentSlot = async (overrideChar = null, overrideCompanions = null, overrideScreen = null) => {
     try {
-      const charToSave = customChar || character;
-      if (!charToSave) return;
-      const data = {
+      const charToSave = overrideChar || character;
+      if (!charToSave) return false;
+
+      const targetSlotId = activeSlotId || `slot_${Date.now()}`;
+      if (!activeSlotId) setActiveSlotId(targetSlotId);
+
+      const updatedSlot = {
+        slotId: targetSlotId,
         character: charToSave,
-        companions: customCompanions || companions,
-        activeCampaign,
-        activeWorldNode,
+        campaign: activeCampaign || { id: 'default', title: 'Chronicle of the Flagon', theme: 'Dungeon Crawl', difficulty: 'Adept' },
+        companions: overrideCompanions || companions,
         activeQuest,
+        activeWorldNode,
         currentLocation,
         currentSceneKey,
+        currentScreen: overrideScreen || currentScreen,
         adventureLog,
         storySummary,
-        turnCount,
         worldState,
+        turnCount,
         completedQuests,
         codexEntries,
-        currentScreen: customScreen || currentScreen,
         activeMonsters,
         turnOrder,
         currentCombatTurn,
         combatPosition,
-        lastSaved: new Date().toISOString()
+        lastPlayed: new Date().toISOString()
       };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 
       setIsSaving(true);
-      const res = await saveGameSession(sessionId, data);
-      if (res && res.id) {
-        setSessionId(res.id);
-        localStorage.setItem('wayward_flagon_active_session_id', res.id);
-      }
+      setSaveSlots(prev => {
+        const index = prev.findIndex(s => s.slotId === targetSlotId);
+        let next;
+        if (index >= 0) {
+          next = [...prev];
+          next[index] = { ...prev[index], ...updatedSlot, createdAt: prev[index].createdAt || updatedSlot.lastPlayed };
+        } else {
+          next = [{ ...updatedSlot, createdAt: new Date().toISOString() }, ...prev].slice(0, 5);
+        }
+        try {
+          localStorage.setItem(SLOTS_KEY, JSON.stringify(next));
+        } catch (err) {
+          console.warn('LocalStorage save quota exceeded:', err);
+        }
+        return next;
+      });
+
+      // Background cloud sync
+      saveGameSession(targetSlotId, updatedSlot).catch(() => {});
       setIsSaving(false);
-      refreshSessions();
       return true;
     } catch (e) {
-      console.error('Failed to save game:', e);
+      console.error('Failed to save slot:', e);
       setIsSaving(false);
       return false;
     }
   };
 
-  const triggerAutosave = async (overrideData = {}) => {
-    if (!character) return;
+  const loadSlot = async (slotId) => {
     try {
-      const payload = {
-        character,
-        companions,
-        activeCampaign,
-        activeWorldNode,
-        activeQuest,
-        currentLocation,
-        currentSceneKey,
-        adventureLog,
-        storySummary,
-        turnCount,
-        worldState,
-        completedQuests,
-        codexEntries,
-        currentScreen,
-        activeMonsters,
-        turnOrder,
-        currentCombatTurn,
-        combatPosition,
-        ...overrideData
-      };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-      const res = await autosaveGameSession(sessionId, payload);
-      if (res && res.id && !sessionId) {
-        setSessionId(res.id);
-        localStorage.setItem('wayward_flagon_active_session_id', res.id);
-      }
-    } catch (err) {
-      console.warn('Autosave background sync deferred:', err);
-    }
-  };
+      soundFx.playClick();
+      soundFx.startTavernAmbience();
 
-  const loadGame = async (targetSessionId = null) => {
-    try {
-      const idToLoad = targetSessionId || sessionId || localStorage.getItem('wayward_flagon_active_session_id');
-      let data = null;
-
-      if (idToLoad) {
-        data = await fetchSessionById(idToLoad);
+      let slot = saveSlots.find(s => s.slotId === slotId);
+      if (!slot) {
+        try {
+          slot = await fetchSessionById(slotId);
+        } catch {}
       }
 
-      if (!data) {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) {
-          data = JSON.parse(saved);
-        }
-      }
+      if (!slot || !slot.character) return false;
 
-      if (data && data.character) {
-        if (data.id) {
-          setSessionId(data.id);
-          localStorage.setItem('wayward_flagon_active_session_id', data.id);
-        }
-        setCharacter(data.character);
-        setCompanions(data.companions || getComplementaryCompanions(data.character.class));
-        if (data.activeCampaign) setActiveCampaign(data.activeCampaign);
-        if (data.activeWorldNode) setActiveWorldNode(data.activeWorldNode);
-        setActiveQuest(data.activeQuest || null);
-        setCurrentLocation(data.currentLocation || 'The Wayward Flagon Tavern');
-        setCurrentSceneKey(data.currentSceneKey || 'tavern');
-        setAdventureLog(data.adventureLog || []);
-        setStorySummary(data.storySummary || '');
-        setTurnCount(data.turnCount || 0);
-        setWorldState(data.worldState || { questStage: 1, totalStages: 4, flags: {} });
-        setCompletedQuests(data.completedQuests || []);
-        if (data.codexEntries) setCodexEntries(data.codexEntries);
-        if (data.activeMonsters) setActiveMonsters(data.activeMonsters);
-        if (data.turnOrder) setTurnOrder(data.turnOrder);
-        if (typeof data.currentCombatTurn === 'number') setCurrentCombatTurn(data.currentCombatTurn);
-        if (data.combatPosition) setCombatPosition(data.combatPosition);
+      setActiveSlotId(slot.slotId);
+      setCharacter(slot.character);
+      setCompanions(slot.companions || getComplementaryCompanions(slot.character.class));
+      if (slot.campaign) setActiveCampaign(slot.campaign);
+      if (slot.activeWorldNode) setActiveWorldNode(slot.activeWorldNode);
+      setActiveQuest(slot.activeQuest || null);
+      setCurrentLocation(slot.currentLocation || 'The Wayward Flagon Tavern');
+      setCurrentSceneKey(slot.currentSceneKey || 'tavern');
+      setAdventureLog(slot.adventureLog || []);
+      setStorySummary(slot.storySummary || '');
+      setTurnCount(slot.turnCount || 0);
+      setWorldState(slot.worldState || { questStage: 1, totalStages: 4, flags: {} });
+      setCompletedQuests(slot.completedQuests || []);
+      if (slot.codexEntries) setCodexEntries(slot.codexEntries);
+      if (slot.activeMonsters) setActiveMonsters(slot.activeMonsters);
+      if (slot.turnOrder) setTurnOrder(slot.turnOrder);
+      if (typeof slot.currentCombatTurn === 'number') setCurrentCombatTurn(slot.currentCombatTurn);
+      if (slot.combatPosition) setCombatPosition(slot.combatPosition);
 
-        const targetScreen = data.currentScreen === 'create' ? 'tavern' : (data.currentScreen || 'tavern');
-        setCurrentScreen(targetScreen);
+      // Touch lastPlayed
+      setSaveSlots(prev => {
+        const updated = prev.map(s => s.slotId === slotId ? { ...s, lastPlayed: new Date().toISOString() } : s);
+        try {
+          localStorage.setItem(SLOTS_KEY, JSON.stringify(updated));
+        } catch {}
+        return updated;
+      });
 
-        soundFx.setMood(targetScreen === 'adventure' ? (data.activeCampaign?.initialMood || 'exploration_wonder') : 'tavern_calm');
-        return true;
-      }
+      const targetScreen = slot.currentScreen === 'adventure' ? 'adventure' : 'tavern';
+      setCurrentScreen(targetScreen);
+      soundFx.setMood(targetScreen === 'adventure' ? (slot.campaign?.initialMood || 'exploration_wonder') : 'tavern_calm');
+      return true;
     } catch (e) {
-      console.error('Failed to load game:', e);
-    }
-    return false;
-  };
-
-  const hasSaveGame = () => {
-    try {
-      if (savedSessions.length > 0) return true;
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (!saved) return false;
-      const data = JSON.parse(saved);
-      return Boolean(data && data.character);
-    } catch {
+      console.error('Failed to load slot:', e);
       return false;
     }
   };
 
-  const startNewGame = () => {
-    setSessionId(null);
-    try {
-      localStorage.removeItem('wayward_flagon_active_session_id');
-    } catch {}
-    setCharacter(null);
-    setCompanions([]);
-    setActiveCampaign(CAMPAIGN_PRESETS[0]);
-    setActiveWorldNode(null);
+  const createNewSlot = (newChar, newCampaign) => {
+    soundFx.playClick();
+    soundFx.startTavernAmbience();
+    soundFx.playSuccess(false);
+
+    const initialCompanions = getComplementaryCompanions(newChar.class);
+    const slotId = `slot_${Date.now()}`;
+
+    const introLog = [
+      {
+        id: `msg-${Date.now()}`,
+        role: 'dm',
+        content: `Welcome to **The Wayward Flagon**, ${newChar.name}. The hearth crackles with welcoming embers, and Barnaby pours a fresh mug of spiced cider. Your chronicle in **${newCampaign.title}** begins here.`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }
+    ];
+
+    const newSlot = {
+      slotId,
+      character: newChar,
+      campaign: newCampaign,
+      companions: initialCompanions,
+      activeQuest: null,
+      currentLocation: 'The Wayward Flagon Tavern',
+      currentSceneKey: 'tavern',
+      currentScreen: 'tavern',
+      adventureLog: introLog,
+      storySummary: '',
+      worldState: {
+        questStage: 0,
+        flags: {},
+        reputation: {},
+        discoveredClues: [],
+        storyBeat: 'EXPLORATION',
+        turnsSinceBanter: 0
+      },
+      turnCount: 0,
+      completedQuests: [],
+      lastPlayed: new Date().toISOString(),
+      totalPlayTime: 0,
+      createdAt: new Date().toISOString()
+    };
+
+    setActiveSlotId(slotId);
+    setCharacter(newChar);
+    setCompanions(initialCompanions);
+    setActiveCampaign(newCampaign);
     setActiveQuest(null);
-    setAdventureLog([]);
-    setStorySummary('');
-    setTurnCount(0);
-    setUndoStack([]);
-    setWorldState({ questStage: 1, totalStages: 4, flags: {} });
-    setCompletedQuests([]);
-    setPendingCheck(null);
-    setActiveMonsters([]);
     setCurrentLocation('The Wayward Flagon Tavern');
     setCurrentSceneKey('tavern');
+    setAdventureLog(introLog);
+    setStorySummary('');
+    setTurnCount(0);
+    setWorldState({ questStage: 0, flags: {}, reputation: {}, discoveredClues: [], storyBeat: 'EXPLORATION', turnsSinceBanter: 0 });
+    setCompletedQuests([]);
+    setPendingCharacter(null);
+
+    setSaveSlots(prev => {
+      const next = [newSlot, ...prev.filter(s => s.slotId !== slotId)].slice(0, 5);
+      try {
+        localStorage.setItem(SLOTS_KEY, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    saveGameSession(slotId, newSlot).catch(() => {});
+    setCurrentScreen('tavern');
+    soundFx.setMood('tavern_calm');
+    return newSlot;
+  };
+
+  const deleteSlot = (slotId) => {
+    soundFx.playClick();
+    setSaveSlots(prev => {
+      const next = prev.filter(s => s.slotId !== slotId);
+      try {
+        localStorage.setItem(SLOTS_KEY, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    if (activeSlotId === slotId) {
+      setActiveSlotId(null);
+      setCharacter(null);
+      setCompanions([]);
+      setAdventureLog([]);
+      setActiveQuest(null);
+      setCurrentScreen('character_select');
+    }
+
+    deleteGameSession(slotId).catch(() => {});
+  };
+
+  const getAllSlots = () => {
+    return [...saveSlots].sort((a, b) => new Date(b.lastPlayed || 0) - new Date(a.lastPlayed || 0));
+  };
+
+  const getSlotCount = () => saveSlots.length;
+
+  // Compatibility adapters
+  const saveGame = (c, comps, screen) => saveCurrentSlot(c, comps, screen);
+  const loadGame = (id) => loadSlot(id);
+  const hasSaveGame = () => saveSlots.length > 0;
+  const startNewGame = () => {
+    setActiveSlotId(null);
+    setCharacter(null);
+    setCompanions([]);
+    setPendingCharacter(null);
     setCurrentScreen('create');
   };
+
 
   const addCustomCampaign = (campaign) => {
     setCustomQuests(prev => {
@@ -744,12 +873,20 @@ export function GameProvider({ children }) {
         setCurrentCombatTurn,
         combatPosition,
         setCombatPosition,
+        saveSlots,
+        activeSlotId,
+        pendingCharacter,
+        setPendingCharacter,
+        loadSlot,
+        saveCurrentSlot,
+        createNewSlot,
+        deleteSlot,
+        getAllSlots,
+        getSlotCount,
         saveGame,
         loadGame,
         hasSaveGame,
         startNewGame,
-        sessionId,
-        savedSessions,
         isSaving,
         refreshSessions,
         triggerAutosave,

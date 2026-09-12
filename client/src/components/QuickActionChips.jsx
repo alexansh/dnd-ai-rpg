@@ -56,13 +56,13 @@ export default function QuickActionChips({
       {/* Action Mode Toggle Bar & Director Controls */}
       <div className="flex items-center justify-between gap-2">
         {/* Do / Say / Story Mode Pills */}
-        <div className="flex items-center gap-1 bg-tavern-darkest/90 p-1 rounded-xl border border-tavern-amber/40 shadow-inner">
+        <div className="flex items-center gap-1 bg-black/60 backdrop-blur-md p-1 rounded-xl border border-tavern-gold/30 shadow-inner">
           <button
             type="button"
             onClick={() => { soundFx.playClick(); setActionMode('do'); }}
             className={`px-3 py-1 rounded-lg text-xs font-cinzel font-bold flex items-center gap-1.5 transition-all ${
               actionMode === 'do'
-                ? 'bg-gradient-to-r from-amber-600 to-yellow-500 text-stone-950 shadow-md scale-102 font-extrabold'
+                ? 'bg-gradient-to-r from-tavern-amber via-tavern-gold to-tavern-glow text-stone-950 shadow-md scale-102 font-extrabold'
                 : 'text-tavern-parchment/70 hover:text-tavern-glow hover:bg-tavern-wood/50'
             }`}
           >
@@ -75,7 +75,7 @@ export default function QuickActionChips({
             onClick={() => { soundFx.playClick(); setActionMode('say'); }}
             className={`px-3 py-1 rounded-lg text-xs font-cinzel font-bold flex items-center gap-1.5 transition-all ${
               actionMode === 'say'
-                ? 'bg-gradient-to-r from-amber-600 to-yellow-500 text-stone-950 shadow-md scale-102 font-extrabold'
+                ? 'bg-gradient-to-r from-tavern-amber via-tavern-gold to-tavern-glow text-stone-950 shadow-md scale-102 font-extrabold'
                 : 'text-tavern-parchment/70 hover:text-tavern-glow hover:bg-tavern-wood/50'
             }`}
           >
@@ -88,7 +88,7 @@ export default function QuickActionChips({
             onClick={() => { soundFx.playClick(); setActionMode('story'); }}
             className={`px-3 py-1 rounded-lg text-xs font-cinzel font-bold flex items-center gap-1.5 transition-all ${
               actionMode === 'story'
-                ? 'bg-gradient-to-r from-amber-600 to-yellow-500 text-stone-950 shadow-md scale-102 font-extrabold'
+                ? 'bg-gradient-to-r from-tavern-amber via-tavern-gold to-tavern-glow text-stone-950 shadow-md scale-102 font-extrabold'
                 : 'text-tavern-parchment/70 hover:text-tavern-glow hover:bg-tavern-wood/50'
             }`}
           >
@@ -104,7 +104,7 @@ export default function QuickActionChips({
               type="button"
               onClick={() => { soundFx.playClick(); onUndo(); }}
               disabled={!canUndo || disabled}
-              className="p-1.5 px-2.5 rounded-lg bg-tavern-wood hover:bg-tavern-umber border border-tavern-amber/40 text-tavern-gold text-xs font-cinzel flex items-center gap-1 transition-all disabled:opacity-30 disabled:pointer-events-none shadow-sm"
+              className="p-1.5 px-2.5 rounded-lg bg-tavern-wood hover:bg-tavern-umber border border-tavern-gold/30 text-tavern-gold text-xs font-cinzel flex items-center gap-1 transition-all disabled:opacity-30 disabled:pointer-events-none shadow-sm"
               title="Undo last turn & restore previous state"
             >
               <Undo2 className="w-3.5 h-3.5" />
@@ -117,8 +117,8 @@ export default function QuickActionChips({
               type="button"
               onClick={() => { soundFx.playClick(); onRetry(); }}
               disabled={!canRetry || disabled}
-              className="p-1.5 px-2.5 rounded-lg bg-tavern-wood hover:bg-tavern-umber border border-tavern-amber/40 text-tavern-gold text-xs font-cinzel flex items-center gap-1 transition-all disabled:opacity-30 disabled:pointer-events-none shadow-sm"
-              title="Retry turn for a fresh DM narrative branch"
+              className="p-1.5 px-2.5 rounded-lg bg-tavern-wood hover:bg-tavern-umber border border-tavern-gold/30 text-tavern-gold text-xs font-cinzel flex items-center gap-1 transition-all disabled:opacity-30 disabled:pointer-events-none shadow-sm"
+              title="Retry last turn with alternate DM outcome"
             >
               <RotateCcw className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Retry</span>
@@ -137,7 +137,7 @@ export default function QuickActionChips({
             key={`${chip}-${idx}`}
             onClick={() => handleChipClick(chip)}
             disabled={disabled}
-            className="shrink-0 text-xs px-3 py-1.5 rounded-full bg-tavern-wood hover:bg-tavern-umber text-tavern-parchment hover:text-tavern-glow border border-tavern-amber/50 hover:border-tavern-gold shadow-sm transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+            className="shrink-0 text-xs px-3 py-1.5 rounded-full bg-black/50 hover:bg-tavern-wood text-tavern-parchment hover:text-tavern-glow border border-tavern-gold/30 hover:border-tavern-gold/70 shadow-sm transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
           >
             {chip}
           </button>
@@ -157,7 +157,7 @@ export default function QuickActionChips({
           onChange={(e) => setInputText(e.target.value)}
           placeholder={getPlaceholder()}
           disabled={disabled}
-          className="w-full pl-10 pr-12 py-3 bg-tavern-darkest/95 border-2 border-tavern-amber/60 rounded-xl text-tavern-parchment text-sm focus:border-tavern-glow focus:outline-none focus:ring-2 focus:ring-tavern-gold/30 shadow-inner placeholder:text-stone-500 font-sans transition-all"
+          className="w-full pl-10 pr-12 py-3 bg-black/60 backdrop-blur-md border border-tavern-gold/35 rounded-xl text-tavern-parchment text-sm focus:border-tavern-glow focus:outline-none focus:ring-2 focus:ring-tavern-gold/30 shadow-inner placeholder:text-stone-500 font-sans transition-all"
         />
         <button
           type="submit"

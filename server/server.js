@@ -41,12 +41,18 @@ import {
   advanceQuestObjective,
   failQuest
 } from './services/questEngine.js';
+import { fileURLToPath } from 'url';
 import {
   buildDirectorGuidance,
   evaluateActTransition
 } from './services/storyDirector.js';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, '.env') });
+dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -487,7 +493,8 @@ app.post('/api/dm/summarize', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`🏰 The Wayward Flagon Server listening on http://localhost:${PORT}`);
   const hasKey = Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'YOUR_GEMINI_API_KEY');
-  console.log(`🗡️ Engine status: ${hasKey ? 'Live Gemini 2.5 Flash Engine' : 'Offline Smart Simulation Engine'}`);
+  const activeModel = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
+  console.log(`🗡️ Engine status: ${hasKey ? `Live Gemini AI Engine (${activeModel})` : 'Offline Smart Simulation Engine'}`);
   console.log(`🔥 Persistence: ${isFirebaseLive() ? 'Cloud Firestore' : 'Local JSON (.data/firestore/)'}`);
   console.log(`🖼️ Asset Store: Permanent content-addressed storage (.data/assets/)`);
 });

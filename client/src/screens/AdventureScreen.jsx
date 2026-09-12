@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, Home, Dices, Flame, Sparkles, MapPin, Award, ArrowLeft, Coins, Gift, Eye, Compass, UserPlus, Heart, Swords, BookOpen, Package, Layers } from 'lucide-react';
+import { Shield, Home, Dices, Flame, Sparkles, MapPin, Award, ArrowLeft, Coins, Gift, Eye, Compass, UserPlus, Users, Heart, Swords, BookOpen, Package, Layers } from 'lucide-react';
 import NarrativeLog from '../components/NarrativeLog';
 import QuickActionChips from '../components/QuickActionChips';
 import DecisionMatrix from '../components/DecisionMatrix';
@@ -70,7 +70,9 @@ export default function AdventureScreen() {
     performCampRest,
     useTacticalSkill,
     returnToTavern,
-    saveGame
+    saveGame,
+    saveCurrentSlot,
+    setCurrentScreen
   } = useGame();
 
   const [viewMode, setViewMode] = useState('narrative'); // 'narrative' | 'world_map' | 'dungeon_map'
@@ -628,6 +630,20 @@ export default function AdventureScreen() {
             >
               <Home className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Tavern</span>
+            </button>
+
+            {/* Save & Return to Character Select Button */}
+            <button
+              onClick={() => {
+                soundFx.playClick();
+                saveCurrentSlot(character, companions, 'adventure');
+                setCurrentScreen('character_select');
+              }}
+              className="px-3 py-1.5 rounded-lg bg-tavern-wood hover:bg-tavern-umber border border-tavern-gold/30 hover:border-tavern-gold/60 text-tavern-gold hover:text-tavern-glow font-cinzel font-bold text-xs shadow-sm flex items-center gap-1.5 transition-all active:scale-95"
+              title="Save & Exit to Character Select"
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Heroes</span>
             </button>
           </div>
         </div>

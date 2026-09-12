@@ -128,7 +128,7 @@ export function decideCompanionCombatAction(companion, { party = [], enemies = [
   if (compClass.includes('rogue')) {
     const target = [...enemies].sort((a, b) => a.hp - b.hp)[0];
     const attackRoll = executeDiceRoll('1d20+5');
-    const damageRoll = executeDiceRoll('1d6+2d6+3');
+    const damageRoll = executeDiceRoll('3d6+3');
     return {
       action: 'sneak_attack',
       targetName: target.name,

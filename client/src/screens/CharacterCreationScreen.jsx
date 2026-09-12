@@ -35,11 +35,12 @@ import {
 import { getComplementaryCompanions } from '../constants/companions';
 import { generateCharacterPortrait } from '../services/api';
 import PortraitDisplay from '../components/PortraitDisplay';
+import EmberParticles from '../components/EmberParticles';
 import { useGame } from '../context/GameContext';
 import { soundFx } from '../services/audio';
 
 export default function CharacterCreationScreen() {
-  const { setCharacter, setCompanions, setCurrentScreen, saveGame } = useGame();
+  const { setPendingCharacter, setCurrentScreen } = useGame();
 
   // Mode: 'archetype' (Pre-made quick start) vs 'custom' (Full D&D 5e Forge)
   const [creationMode, setCreationMode] = useState('archetype');
@@ -301,29 +302,25 @@ export default function CharacterCreationScreen() {
       portraitUrl: portraitUrl || null
     };
 
-    // Auto-assign complementary companions
-    const initialCompanions = getComplementaryCompanions(heroClass);
-
-    setCharacter(newHero);
-    setCompanions(initialCompanions);
-    saveGame(newHero, initialCompanions, 'world_select');
-    setCurrentScreen('world_select');
+    setPendingCharacter(newHero);
+    setCurrentScreen('campaign_select');
     soundFx.setMood('exploration_wonder');
   };
 
   return (
-    <div className="min-h-screen p-3 sm:p-6 candle-glow-bg overflow-y-auto">
-      <div className="max-w-5xl mx-auto space-y-5">
+    <div className="relative min-h-screen p-3 sm:p-6 bg-[#0a0704] candle-glow-bg overflow-y-auto">
+      <EmberParticles count={6} />
+      <div className="relative z-10 max-w-5xl mx-auto space-y-5">
         {/* Top Header */}
         <div className="flex items-center justify-between border-b border-tavern-amber/40 pb-3">
           <button
             onClick={() => {
               soundFx.playClick();
-              setCurrentScreen('title');
+              setCurrentScreen('character_select');
             }}
-            className="flex items-center gap-1.5 text-xs font-cinzel text-tavern-gold hover:text-tavern-glow transition-colors"
+            className="flex items-center gap-1.5 text-xs font-cinzel text-tavern-gold hover:text-tavern-glow transition-colors px-3 py-1.5 rounded-lg bg-black/40 border border-tavern-gold/20"
           >
-            <ArrowLeft className="w-4 h-4" /> Back to Title
+            <ArrowLeft className="w-4 h-4" /> Back to Characters
           </button>
           <div className="text-center">
             <h2 className="text-2xl sm:text-3xl font-cinzel font-bold text-tavern-glow">Hero Forge</h2>
@@ -730,12 +727,13 @@ export default function CharacterCreationScreen() {
               ))}
             </div>
 
-            {/* Submit & Choose World Button */}
+            {/* Submit & Choose Campaign Button */}
             <button
               onClick={handleCreateHero}
               className="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-tavern-amber via-tavern-gold to-tavern-glow text-tavern-darkest font-cinzel font-bold text-sm sm:text-base shadow-candle hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
             >
-              <span>Choose World & Begin Journey</span>
+              <Sparkles className="w-5 h-5 text-tavern-darkest" />
+              <span>Forge Hero & Choose Destiny</span>
               <ArrowRight className="w-5 h-5" />
             </button>
           </div>

@@ -52,7 +52,7 @@ export default function NarrativeLog({
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden bg-tavern-darkest/90 border border-tavern-amber/40 rounded-xl shadow-2xl relative">
+    <div className="flex-1 flex flex-col h-full overflow-hidden bg-black/45 backdrop-blur-xl border border-tavern-gold/25 rounded-2xl shadow-2xl relative">
       {/* Story Summary Accordion Header */}
       {storySummary && (
         <div className="border-b border-tavern-amber/30 bg-tavern-wood/70 text-xs shrink-0">
@@ -88,7 +88,7 @@ export default function NarrativeLog({
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-                className="bg-tavern-wood/80 border-l-4 border-tavern-gold rounded-r-lg p-4 sm:p-5 shadow-candle relative overflow-hidden group"
+                className="bg-stone-950/70 border-l-2 border-tavern-gold rounded-xl p-4 sm:p-5 shadow-candle relative overflow-hidden group border border-stone-800/40"
               >
                 <div className="flex items-center justify-between text-xs font-cinzel font-bold text-tavern-gold mb-1.5 uppercase tracking-wider">
                   <div className="flex items-center gap-2">

@@ -153,7 +153,7 @@ ${checkResult ? `[CHECK RESOLVED: ${checkResult.ability} total ${checkResult.tot
         generationConfig: {
           responseMimeType: 'application/json',
           temperature: 0.75,
-          maxOutputTokens: 950
+          maxOutputTokens: 4096
         }
       })
     });
@@ -170,7 +170,7 @@ ${checkResult ? `[CHECK RESOLVED: ${checkResult.ability} total ${checkResult.tot
           generationConfig: {
             responseMimeType: 'application/json',
             temperature: 0.75,
-            maxOutputTokens: 950
+            maxOutputTokens: 4096
           }
         })
       });

@@ -126,15 +126,28 @@ Respond ONLY with valid JSON matching this exact structure:
 }
 `;
 
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-      const res = await fetch(apiUrl, {
+      const modelName = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+      let res = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: { responseMimeType: 'application/json', temperature: 0.85 }
+          generationConfig: { responseMimeType: 'application/json', temperature: 0.85, maxOutputTokens: 4096 }
         })
       });
+
+      if (res.status === 404 && modelName !== 'gemini-flash-latest') {
+        const fallbackUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`;
+        res = await fetch(fallbackUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            generationConfig: { responseMimeType: 'application/json', temperature: 0.85, maxOutputTokens: 4096 }
+          })
+        });
+      }
 
       if (res.ok) {
         const data = await res.json();

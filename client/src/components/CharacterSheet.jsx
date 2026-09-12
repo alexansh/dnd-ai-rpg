@@ -105,13 +105,19 @@ export default function CharacterSheet({ isCompact = false, onInspectItem }) {
   ];
 
   return (
-    <div className={`w-full bg-tavern-wood border border-tavern-gold/40 rounded-xl overflow-hidden shadow-parchment text-tavern-parchment transition-all duration-300 ${
+    <div className={`relative w-full bg-black/45 backdrop-blur-xl border border-tavern-gold/25 rounded-2xl overflow-hidden shadow-2xl text-tavern-parchment transition-all duration-300 ${
       hpFlash === 'damage' ? 'ring-2 ring-red-500 shadow-[0_0_20px_rgba(239,68,68,0.4)]' : hpFlash === 'heal' ? 'ring-2 ring-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.4)]' : ''
     }`}>
+      {/* 4 Ornate Gold Corner Brackets */}
+      <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-tavern-glow pointer-events-none rounded-tl-sm z-20" />
+      <div className="absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2 border-tavern-glow pointer-events-none rounded-tr-sm z-20" />
+      <div className="absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2 border-tavern-glow pointer-events-none rounded-bl-sm z-20" />
+      <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-tavern-glow pointer-events-none rounded-br-sm z-20" />
+
       {/* Mobile Accordion Toggle */}
       <div
         onClick={() => setIsOpenMobile(!isOpenMobile)}
-        className="lg:hidden flex items-center justify-between p-3 bg-tavern-umber/80 border-b border-tavern-amber/40 cursor-pointer"
+        className="lg:hidden flex items-center justify-between p-3 bg-stone-900/80 border-b border-tavern-gold/20 cursor-pointer"
       >
         <div className="flex items-center gap-2.5">
           <PortraitDisplay
