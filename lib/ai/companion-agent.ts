@@ -23,7 +23,7 @@ export const COMPANION_PROFILES: Record<string, CompanionProfile> = {
     personality: "Pragmatic, compassionate, unwavering faith in the Dawnmother, despises reckless cruelty.",
     tacticalStyle: "Prioritizes healing grievously wounded allies, smites undead with radiant fire.",
     approval: 20,
-    portrait: "/assets/images/companions/cleric.jpg",
+    portrait: "/assets/images/companions/thalia.jpg",
   },
   vaelin: {
     id: "vaelin",
@@ -34,7 +34,7 @@ export const COMPANION_PROFILES: Record<string, CompanionProfile> = {
     personality: "Cynical, sharp-tongued, opportunistic, hyper-observant of traps and coin purses.",
     tacticalStyle: "Hunts flanking angles for Sneak Attacks, retreats behind cover with Cunning Action.",
     approval: 10,
-    portrait: "/assets/images/companions/rogue.jpg",
+    portrait: "/assets/images/companions/vaelin.jpg",
   },
   garrick: {
     id: "garrick",
@@ -45,7 +45,7 @@ export const COMPANION_PROFILES: Record<string, CompanionProfile> = {
     personality: "Stoic, honorable, proud veteran of the Silver Guard, protective of his companions.",
     tacticalStyle: "Holds chokepoints, taunts deadly foes, swings forged steel with crushing force.",
     approval: 25,
-    portrait: "/assets/images/companions/fighter.jpg",
+    portrait: "/assets/images/companions/grimjaw.jpg",
   },
 };
 

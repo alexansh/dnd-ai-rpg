@@ -157,7 +157,8 @@ test("Tactical Grid & Combat Mechanics", async (t) => {
     assert.strictEqual(advanced.activeTurnIndex, 1);
 
     // Apply damage to p1 (absorbs 5 temp HP, 3 normal HP)
-    const result = applyDamageToCombatant(combat.combatants[0], 8);
+    const p1 = combat.combatants.find((c) => c.id === "p1")!;
+    const result = applyDamageToCombatant(p1, 8);
     assert.strictEqual(result.combatant.tempHp, 0);
     assert.strictEqual(result.combatant.currentHp, 17);
     assert.strictEqual(result.died, false);

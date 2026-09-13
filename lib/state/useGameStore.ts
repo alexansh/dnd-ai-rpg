@@ -101,6 +101,11 @@ export interface GameState {
   activeDiceRoll: RollResult | null;
   isDiceRolling: boolean;
 
+  currentScreen: "title" | "game";
+  setCurrentScreen: (screen: "title" | "game") => void;
+  isCampaignSelectOpen: boolean;
+  openCampaignSelect: (open: boolean) => void;
+
   // Actions
   setPlayer: (player: Partial<PlayerCharacter>) => void;
   openCharacterSheet: (open: boolean) => void;
@@ -188,6 +193,11 @@ export const useGameStore = create<GameState>()(
       activeBestiaryMonsterKey: null,
       activeDiceRoll: null,
       isDiceRolling: false,
+
+      currentScreen: "title",
+      setCurrentScreen: (screen) => set({ currentScreen: screen }),
+      isCampaignSelectOpen: false,
+      openCampaignSelect: (open) => set({ isCampaignSelectOpen: open }),
 
       setPlayer: (updates) =>
         set((state) => ({ player: { ...state.player, ...updates } })),
@@ -789,6 +799,7 @@ export const useGameStore = create<GameState>()(
           isCombatActive: false,
           combat: null,
           tacticalMap: null,
+          currentScreen: "title",
         });
       },
     }),
