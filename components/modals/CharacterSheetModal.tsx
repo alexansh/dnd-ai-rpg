@@ -4,12 +4,12 @@ import React from "react";
 import { useGameStore } from "@/lib/state/useGameStore";
 import { SRD_ITEMS } from "@/lib/srd/items";
 import { calculateAbilityModifier } from "@/lib/engine/rules";
-import { Shield, Heart, Zap, X, Bed, Moon, Swords, Sparkles } from "lucide-react";
+import { Shield, Heart, Zap, X, Bed, Moon, Swords, Sparkles, Trash2 } from "lucide-react";
 
 export default function CharacterSheetModal() {
-  const { isCharacterSheetOpen, openCharacterSheet, player, restShort, restLong, setPlayer } = useGameStore();
+  const { isCharacterSheetOpen, openCharacterSheet, player, restShort, restLong, setPlayer, openDeleteModal } = useGameStore();
 
-  if (!isCharacterSheetOpen) return null;
+  if (!isCharacterSheetOpen || !player) return null;
 
   const abilityKeys = ["str", "dex", "con", "int", "wis", "cha"] as const;
 
@@ -185,6 +185,29 @@ export default function CharacterSheetModal() {
                 );
               })}
             </div>
+          </div>
+
+          {/* Danger Zone: Character Deletion */}
+          <div className="pt-4 border-t border-parchment-400/60 flex items-center justify-between bg-parchment-100/50 p-4 rounded-2xl border border-blood-500/20">
+            <div>
+              <h4 className="font-cinzel text-xs font-bold text-blood-700 uppercase tracking-wider">
+                Danger Zone • Rite of Ash
+              </h4>
+              <p className="text-[11px] text-parchment-900/70">
+                Permanently incinerate this hero scroll and purge their campaign chronicle.
+              </p>
+            </div>
+
+            <button
+              onClick={() => {
+                openCharacterSheet(false);
+                openDeleteModal(true);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blood-100 hover:bg-blood-200 text-blood-800 border border-blood-400/60 font-cinzel font-bold text-xs transition-all shadow-sm hover:scale-[1.02] active:scale-98"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-blood-700" />
+              <span>Delete Character</span>
+            </button>
           </div>
         </div>
       </div>

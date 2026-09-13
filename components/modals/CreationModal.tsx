@@ -8,7 +8,7 @@ import { AbilityScores, AbilityScoreKey } from "@/lib/srd/types";
 import { X, Sparkles, RefreshCw, CheckCircle2 } from "lucide-react";
 
 export default function CreationModal() {
-  const { isCreationOpen, openCreation, setPlayer } = useGameStore();
+  const { isCreationOpen, openCreation, createAndActivateCharacter } = useGameStore();
 
   const [name, setName] = useState("Kaelen Ashborne");
   const [selectedRace, setSelectedRace] = useState("human");
@@ -64,7 +64,7 @@ export default function CreationModal() {
     const conMod = Math.floor((finalScores.con - 10) / 2);
     const maxHp = classDef.hitDie + conMod;
 
-    setPlayer({
+    createAndActivateCharacter({
       name: name.trim() || "Adventurer",
       race: raceDef.name,
       className: classDef.name,

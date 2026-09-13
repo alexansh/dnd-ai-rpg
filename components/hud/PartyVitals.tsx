@@ -7,6 +7,8 @@ import { Shield, Heart, Zap, Sparkles, BookOpen, User, Flame } from "lucide-reac
 export default function PartyVitals() {
   const { player, companions, openCharacterSheet, openBestiary, isCombatActive } = useGameStore();
 
+  if (!player) return null;
+
   const hpPct = Math.max(0, Math.min(1, player.currentHp / player.maxHp));
 
   return (

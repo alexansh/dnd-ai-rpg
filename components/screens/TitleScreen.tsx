@@ -14,6 +14,8 @@ import {
   Heart,
   ChevronRight,
   RotateCcw,
+  Trash2,
+  Users,
 } from "lucide-react";
 
 export default function TitleScreen() {
@@ -21,14 +23,22 @@ export default function TitleScreen() {
     player,
     currentLocation,
     currentAct,
+    characterSaves,
+    activeCharacterId,
     setCurrentScreen,
     openCreation,
     openCampaignSelect,
     openBestiary,
+    openDeleteModal,
+    openRosterModal,
     resetGame,
   } = useGameStore();
 
   const handleStartGame = () => {
+    if (!player) {
+      openCreation(true);
+      return;
+    }
     setCurrentScreen("game");
   };
 
@@ -79,56 +89,95 @@ export default function TitleScreen() {
           </p>
         </div>
 
-        {/* Active Hero Preview Card */}
-        <div className="w-full max-w-md p-4 rounded-2xl bg-obsidian-900/90 border border-gold-500/40 shadow-2xl backdrop-blur-md flex items-center gap-4 text-left">
-          <div className="relative w-16 h-16 rounded-xl overflow-hidden border-2 border-gold-500 shadow-md shrink-0">
-            <img src={player.portrait} alt={player.name} className="w-full h-full object-cover" />
-            <div className="absolute bottom-0 inset-x-0 bg-obsidian-950/90 text-[9px] font-bold text-center text-gold-400 font-cinzel">
-              LVL {player.level}
+        {/* Active Hero Preview Card or Empty State */}
+        {player ? (
+          <div className="relative w-full max-w-md p-4 rounded-2xl bg-obsidian-900/90 border border-gold-500/40 shadow-2xl backdrop-blur-md flex items-center gap-4 text-left group">
+            <div className="relative w-16 h-16 rounded-xl overflow-hidden border-2 border-gold-500 shadow-md shrink-0">
+              <img src={player.portrait} alt={player.name} className="w-full h-full object-cover" />
+              <div className="absolute bottom-0 inset-x-0 bg-obsidian-950/90 text-[9px] font-bold text-center text-gold-400 font-cinzel">
+                LVL {player.level}
+              </div>
             </div>
-          </div>
 
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between">
-              <h3 className="font-cinzel text-sm font-bold text-parchment-100 truncate">
-                {player.name}
-              </h3>
-              <span className="text-[10px] text-gold-400 font-mono font-semibold">
-                ACT {currentAct}
-              </span>
+            <div className="flex-1 min-w-0 pr-16">
+              <div className="flex items-center justify-between">
+                <h3 className="font-cinzel text-sm font-bold text-parchment-100 truncate">
+                  {player.name}
+                </h3>
+              </div>
+              <div className="text-xs text-gold-400/80 font-medium">
+                {player.race} {player.className}
+              </div>
+              <div className="flex items-center gap-3 mt-1.5 text-[11px] text-parchment-300/70 font-mono">
+                <span className="flex items-center gap-1">
+                  <Heart className="w-3 h-3 text-blood-500" /> {player.currentHp}/{player.maxHp} HP
+                </span>
+                <span className="flex items-center gap-1">
+                  <Shield className="w-3 h-3 text-gold-400" /> AC {player.armorClass}
+                </span>
+                <span className="text-parchment-400 truncate">
+                  • Act {currentAct}
+                </span>
+              </div>
             </div>
-            <div className="text-xs text-gold-400/80 font-medium">
-              {player.race} {player.className}
-            </div>
-            <div className="flex items-center gap-3 mt-1.5 text-[11px] text-parchment-300/70 font-mono">
-              <span className="flex items-center gap-1">
-                <Heart className="w-3 h-3 text-blood-500" /> {player.currentHp}/{player.maxHp} HP
-              </span>
-              <span className="flex items-center gap-1">
-                <Shield className="w-3 h-3 text-gold-400" /> AC {player.armorClass}
-              </span>
-              <span className="text-parchment-400 truncate">
-                • {currentLocation}
-              </span>
+
+            {/* Micro Action Buttons on Card */}
+            <div className="absolute top-3 right-3 flex items-center gap-1.5">
+              <button
+                onClick={() => openRosterModal(true)}
+                className="p-1.5 rounded-lg bg-obsidian-850 hover:bg-gold-500/20 text-gold-400 border border-gold-500/30 transition-colors"
+                title="Open Hero Roster"
+              >
+                <Users className="w-3.5 h-3.5" />
+              </button>
+
+              <button
+                onClick={() => openDeleteModal(true, activeCharacterId || undefined)}
+                className="p-1.5 rounded-lg bg-obsidian-850 hover:bg-blood-950/80 text-parchment-400 hover:text-blood-400 border border-gold-500/20 hover:border-blood-500/40 transition-colors"
+                title="Delete Character & Campaign"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="w-full max-w-md p-6 rounded-2xl bg-obsidian-900/90 border border-gold-500/30 shadow-2xl backdrop-blur-md flex flex-col items-center text-center space-y-3">
+            <div className="w-12 h-12 rounded-2xl bg-obsidian-950 border border-gold-500/20 flex items-center justify-center text-amber-500">
+              <Flame className="w-6 h-6 animate-pulse" />
+            </div>
+            <div>
+              <h3 className="font-cinzel text-sm font-bold text-parchment-200 uppercase tracking-wider">
+                The Taproom Awaits a Hero
+              </h3>
+              <p className="text-xs text-parchment-300/60 mt-1">
+                All chronicles have been incinerated. Forge a new hero to embark.
+              </p>
+            </div>
+            <button
+              onClick={() => openCreation(true)}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-gold-600 to-amber-500 hover:from-gold-500 hover:to-gold-400 text-obsidian-950 font-cinzel font-bold text-xs shadow-gold-glow transition-all hover:scale-[1.02]"
+            >
+              <Sparkles className="w-4 h-4" />
+              <span>Forge New Hero</span>
+            </button>
+          </div>
+        )}
 
         {/* Main Menu Action Buttons */}
         <div className="w-full max-w-md flex flex-col gap-3">
-          {/* Primary Continue Button */}
+          {/* Primary Continue / Embark Button */}
           <button
             onClick={handleStartGame}
             className="group w-full flex items-center justify-between px-6 py-3.5 rounded-2xl bg-gradient-to-r from-gold-600 via-gold-500 to-amber-500 hover:from-gold-500 hover:to-gold-400 text-obsidian-950 font-cinzel font-bold text-sm shadow-gold-glow transition-all hover:scale-[1.02] active:scale-98"
           >
             <div className="flex items-center gap-3">
               <Compass className="w-5 h-5 text-obsidian-950" />
-              <span>Resume Adventure</span>
+              <span>{player ? "Resume Adventure" : "Forge Hero & Begin"}</span>
             </div>
             <ChevronRight className="w-5 h-5 transition-transform group-hover:translate-x-1" />
           </button>
 
-          {/* New Adventure / Hero Forge */}
+          {/* New Adventure / Hero Forge & Chronicles */}
           <div className="grid grid-cols-2 gap-3">
             <button
               onClick={() => openCreation(true)}
@@ -147,8 +196,16 @@ export default function TitleScreen() {
             </button>
           </div>
 
-          {/* Secondary Actions Row */}
+          {/* Secondary Actions Row: Hero Roster & Bestiary */}
           <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => openRosterModal(true)}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-obsidian-950/70 hover:bg-obsidian-900 text-gold-400 border border-gold-500/20 hover:border-gold-500/40 text-xs font-cinzel transition-all"
+            >
+              <Users className="w-3.5 h-3.5 text-amber-400" />
+              <span>Hero Roster ({characterSaves.length})</span>
+            </button>
+
             <button
               onClick={() => openBestiary(true)}
               className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-obsidian-950/70 hover:bg-obsidian-900 text-parchment-300 border border-gold-500/20 hover:border-gold-500/40 text-xs font-cinzel transition-all"
@@ -156,19 +213,18 @@ export default function TitleScreen() {
               <BookOpen className="w-3.5 h-3.5 text-gold-500" />
               <span>SRD Bestiary</span>
             </button>
-
-            <button
-              onClick={() => {
-                if (confirm("Reset current chronicle and start a fresh journey?")) {
-                  resetGame();
-                }
-              }}
-              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-obsidian-950/70 hover:bg-obsidian-900 text-parchment-300 hover:text-blood-400 border border-gold-500/20 hover:border-blood-500/40 text-xs font-cinzel transition-all"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Reset Journey</span>
-            </button>
           </div>
+
+          {/* Danger Row: Delete Character & Campaign */}
+          {player && (
+            <button
+              onClick={() => openDeleteModal(true, activeCharacterId || undefined)}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-obsidian-950/40 hover:bg-blood-950/50 text-parchment-400 hover:text-blood-400 border border-blood-500/20 hover:border-blood-500/40 text-xs font-cinzel transition-all"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-blood-500" />
+              <span>Delete Character & Campaign</span>
+            </button>
+          )}
         </div>
       </div>
 

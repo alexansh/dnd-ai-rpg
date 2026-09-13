@@ -14,7 +14,9 @@ import BestiaryModal from "@/components/modals/BestiaryModal";
 import CreationModal from "@/components/modals/CreationModal";
 import SpellbookDrawer from "@/components/hud/SpellbookDrawer";
 import SoundscapePlayer from "@/components/audio/SoundscapePlayer";
-import { Flame, Sparkles, RotateCcw, DoorOpen, Scroll } from "lucide-react";
+import DeleteCharacterModal from "@/components/modals/DeleteCharacterModal";
+import CharacterRosterModal from "@/components/modals/CharacterRosterModal";
+import { Flame, Sparkles, RotateCcw, DoorOpen, Scroll, Users, Trash2 } from "lucide-react";
 
 export default function GamePage() {
   const {
@@ -22,6 +24,8 @@ export default function GamePage() {
     setCurrentScreen,
     openCreation,
     openCampaignSelect,
+    openRosterModal,
+    openDeleteModal,
     resetGame,
   } = useGameStore();
 
@@ -82,6 +86,14 @@ export default function GamePage() {
               </button>
 
               <button
+                onClick={() => openRosterModal(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-obsidian-900 border border-gold-500/30 hover:border-gold-400 text-gold-400 text-xs font-cinzel font-bold shadow-sm transition-all"
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>Roster</span>
+              </button>
+
+              <button
                 onClick={() => openCreation(true)}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-obsidian-900 border border-gold-500/30 hover:border-gold-400 text-gold-400 text-xs font-cinzel font-bold shadow-sm transition-all"
               >
@@ -90,15 +102,11 @@ export default function GamePage() {
               </button>
 
               <button
-                onClick={() => {
-                  if (confirm("Reset current chronicle and return to the dungeon entrance?")) {
-                    resetGame();
-                  }
-                }}
+                onClick={() => openDeleteModal(true)}
                 className="p-1.5 rounded-xl text-parchment-300/50 hover:text-blood-400 hover:bg-obsidian-900 transition-colors"
-                title="Reset Chronicle"
+                title="Delete Character & Campaign"
               >
-                <RotateCcw className="w-4 h-4" />
+                <Trash2 className="w-4 h-4" />
               </button>
             </div>
           </header>
@@ -127,6 +135,8 @@ export default function GamePage() {
       <CreationModal />
       <SpellbookDrawer />
       <CampaignSelectModal />
+      <DeleteCharacterModal />
+      <CharacterRosterModal />
     </main>
   );
 }

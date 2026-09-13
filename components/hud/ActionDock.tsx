@@ -16,6 +16,8 @@ export default function ActionDock() {
     executePlayerCombatAttack,
   } = useGameStore();
 
+  if (!player) return null;
+
   const [inputVal, setInputVal] = useState("");
 
   const activeCombatant = combat?.combatants[combat.activeTurnIndex];

@@ -8,7 +8,7 @@ import { Sparkles, X, Wand2, Shield, Heart } from "lucide-react";
 export default function SpellbookDrawer() {
   const { isSpellbookOpen, openSpellbook, player, combat, executePlayerCastSpell } = useGameStore();
 
-  if (!isSpellbookOpen) return null;
+  if (!isSpellbookOpen || !player) return null;
 
   const spells = Object.values(SRD_SPELLS);
 

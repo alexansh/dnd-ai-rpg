@@ -64,8 +64,23 @@ export interface PlayerCharacter {
   conditions: Condition[];
 }
 
-export interface GameState {
+export interface CharacterSaveSlot {
+  id: string;
   player: PlayerCharacter;
+  currentAct: number;
+  currentLocation: string;
+  currentObjective: string;
+  ambiance: "dungeon_creepy" | "tavern_warm" | "battle_tense" | "crypt_solemn";
+  logs: LogEntry[];
+  createdAt: string;
+  lastPlayed: string;
+}
+
+export interface GameState {
+  player: PlayerCharacter | null;
+  characterSaves: CharacterSaveSlot[];
+  activeCharacterId: string | null;
+
   companions: Record<string, CompanionProfile>;
   currentAct: number;
   currentLocation: string;
@@ -105,6 +120,16 @@ export interface GameState {
   setCurrentScreen: (screen: "title" | "game") => void;
   isCampaignSelectOpen: boolean;
   openCampaignSelect: (open: boolean) => void;
+
+  // Character Management & Deletion
+  isDeleteModalOpen: boolean;
+  characterToDeleteId: string | null;
+  openDeleteModal: (open: boolean, characterId?: string) => void;
+  isRosterModalOpen: boolean;
+  openRosterModal: (open: boolean) => void;
+  deleteCharacterAndCampaign: (characterId: string) => void;
+  switchCharacter: (characterId: string) => void;
+  createAndActivateCharacter: (playerData: Partial<PlayerCharacter>) => void;
 
   // Actions
   setPlayer: (player: Partial<PlayerCharacter>) => void;
@@ -154,9 +179,31 @@ const DEFAULT_PLAYER: PlayerCharacter = {
 
 const initialStage = SUNKEN_CRYPT_STAGES[1];
 
+export const DEFAULT_SAVE_SLOT: CharacterSaveSlot = {
+  id: "char_default_kaelen",
+  player: DEFAULT_PLAYER,
+  currentAct: 1,
+  currentLocation: initialStage.locationName,
+  currentObjective: initialStage.objective,
+  ambiance: initialStage.ambiance,
+  logs: [
+    {
+      id: "log_init",
+      role: "dm",
+      speaker: "Dungeon Master",
+      text: initialStage.description,
+      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    },
+  ],
+  createdAt: new Date().toISOString(),
+  lastPlayed: new Date().toISOString(),
+};
+
 export const useGameStore = create<GameState>()(
   persist(
     (set, get) => ({
+      characterSaves: [DEFAULT_SAVE_SLOT],
+      activeCharacterId: DEFAULT_SAVE_SLOT.id,
       player: DEFAULT_PLAYER,
       companions: COMPANION_PROFILES,
       currentAct: 1,
@@ -199,8 +246,177 @@ export const useGameStore = create<GameState>()(
       isCampaignSelectOpen: false,
       openCampaignSelect: (open) => set({ isCampaignSelectOpen: open }),
 
+      isDeleteModalOpen: false,
+      characterToDeleteId: null,
+      openDeleteModal: (open, characterId) =>
+        set((state) => ({
+          isDeleteModalOpen: open,
+          characterToDeleteId: characterId ?? (open ? state.activeCharacterId : null),
+        })),
+
+      isRosterModalOpen: false,
+      openRosterModal: (open) => set({ isRosterModalOpen: open }),
+
+      deleteCharacterAndCampaign: (characterId: string) => {
+        const { characterSaves, activeCharacterId } = get();
+        const updated = characterSaves.filter((c) => c.id !== characterId);
+
+        if (activeCharacterId === characterId) {
+          if (updated.length > 0) {
+            const next = updated[0];
+            set({
+              characterSaves: updated,
+              activeCharacterId: next.id,
+              player: next.player,
+              currentAct: next.currentAct,
+              currentLocation: next.currentLocation,
+              currentObjective: next.currentObjective,
+              ambiance: next.ambiance,
+              logs: next.logs,
+              isDeleteModalOpen: false,
+              characterToDeleteId: null,
+              isCombatActive: false,
+              combat: null,
+              tacticalMap: null,
+            });
+          } else {
+            // All characters deleted! Completely purge active campaign and character
+            set({
+              characterSaves: [],
+              activeCharacterId: null,
+              player: null,
+              currentAct: 1,
+              currentLocation: initialStage.locationName,
+              currentObjective: initialStage.objective,
+              ambiance: initialStage.ambiance,
+              logs: [],
+              isDeleteModalOpen: false,
+              characterToDeleteId: null,
+              isCombatActive: false,
+              combat: null,
+              tacticalMap: null,
+              currentScreen: "title",
+            });
+          }
+        } else {
+          set({
+            characterSaves: updated,
+            isDeleteModalOpen: false,
+            characterToDeleteId: null,
+          });
+        }
+      },
+
+      switchCharacter: (characterId: string) => {
+        const { characterSaves, activeCharacterId, player, currentAct, currentLocation, currentObjective, ambiance, logs } = get();
+        const updatedSaves = characterSaves.map((slot) => {
+          if (slot.id === activeCharacterId && player) {
+            return {
+              ...slot,
+              player,
+              currentAct,
+              currentLocation,
+              currentObjective,
+              ambiance,
+              logs,
+              lastPlayed: new Date().toISOString(),
+            };
+          }
+          return slot;
+        });
+
+        const target = updatedSaves.find((s) => s.id === characterId);
+        if (target) {
+          set({
+            characterSaves: updatedSaves,
+            activeCharacterId: target.id,
+            player: target.player,
+            currentAct: target.currentAct,
+            currentLocation: target.currentLocation,
+            currentObjective: target.currentObjective,
+            ambiance: target.ambiance,
+            logs: target.logs,
+            isCombatActive: false,
+            combat: null,
+            tacticalMap: null,
+            isRosterModalOpen: false,
+          });
+        }
+      },
+
+      createAndActivateCharacter: (playerData: Partial<PlayerCharacter>) => {
+        const newPlayer: PlayerCharacter = {
+          ...DEFAULT_PLAYER,
+          ...playerData,
+        };
+
+        const newId = `char_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+        const newSlot: CharacterSaveSlot = {
+          id: newId,
+          player: newPlayer,
+          currentAct: 1,
+          currentLocation: initialStage.locationName,
+          currentObjective: initialStage.objective,
+          ambiance: initialStage.ambiance,
+          logs: [
+            {
+              id: `log_init_${newId}`,
+              role: "dm",
+              speaker: "Dungeon Master",
+              text: initialStage.description,
+              timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            },
+          ],
+          createdAt: new Date().toISOString(),
+          lastPlayed: new Date().toISOString(),
+        };
+
+        set((state) => {
+          let existing = state.characterSaves;
+          if (state.activeCharacterId && state.player) {
+            existing = existing.map((slot) =>
+              slot.id === state.activeCharacterId
+                ? {
+                    ...slot,
+                    player: state.player!,
+                    currentAct: state.currentAct,
+                    currentLocation: state.currentLocation,
+                    currentObjective: state.currentObjective,
+                    ambiance: state.ambiance,
+                    logs: state.logs,
+                    lastPlayed: new Date().toISOString(),
+                  }
+                : slot
+            );
+          }
+
+          return {
+            characterSaves: [...existing, newSlot],
+            activeCharacterId: newId,
+            player: newPlayer,
+            currentAct: newSlot.currentAct,
+            currentLocation: newSlot.currentLocation,
+            currentObjective: newSlot.currentObjective,
+            ambiance: newSlot.ambiance,
+            logs: newSlot.logs,
+            isCombatActive: false,
+            combat: null,
+            tacticalMap: null,
+            isCreationOpen: false,
+            currentScreen: "title",
+          };
+        });
+      },
+
       setPlayer: (updates) =>
-        set((state) => ({ player: { ...state.player, ...updates } })),
+        set((state) => {
+          if (!state.player) return state;
+          const updatedPlayer = { ...state.player, ...updates };
+          const updatedSaves = state.characterSaves.map((slot) =>
+            slot.id === state.activeCharacterId ? { ...slot, player: updatedPlayer } : slot
+          );
+          return { player: updatedPlayer, characterSaves: updatedSaves };
+        }),
 
       openCharacterSheet: (open) => set({ isCharacterSheetOpen: open }),
       openBestiary: (open, monsterKey) =>
@@ -210,6 +426,7 @@ export const useGameStore = create<GameState>()(
 
       submitPlayerAction: async (actionText) => {
         const { currentAct, currentLocation, currentObjective, player } = get();
+        if (!player) return;
         const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
         // Add player utterance to log
@@ -286,6 +503,7 @@ export const useGameStore = create<GameState>()(
 
       performSkillCheck: async (skill, dc, ability) => {
         const { player } = get();
+        if (!player) return;
         const score = player.abilities[ability];
         const profBonus = calculateProficiencyBonus(player.level);
         const isProf = skill.toLowerCase() === "athletics" || skill.toLowerCase() === "investigation";
@@ -341,6 +559,7 @@ export const useGameStore = create<GameState>()(
 
       startCombatEncounter: (stage) => {
         const { player } = get();
+        if (!player) return;
         const map = generateTacticalMap(stage);
 
         const combatants: Omit<Combatant, "initiative" | "actionUsed" | "bonusActionUsed" | "reactionUsed" | "movementUsedFt">[] = [
@@ -523,7 +742,7 @@ export const useGameStore = create<GameState>()(
       executePlayerCastSpell: (spellId, targetId) => {
         const { combat, player } = get();
         const spell = SRD_SPELLS[spellId];
-        if (!spell || !combat) return;
+        if (!spell || !combat || !player) return;
 
         const activeCombatant = combat.combatants[combat.activeTurnIndex];
         if (!activeCombatant || !activeCombatant.isPlayer || activeCombatant.actionUsed) return;
@@ -735,83 +954,161 @@ export const useGameStore = create<GameState>()(
 
       restShort: () => {
         const { player } = get();
+        if (!player) return;
         const hitDieRoll = executeRoll("1d10+2", "Short Rest Healing");
         const newHp = Math.min(player.maxHp, player.currentHp + hitDieRoll.total);
         const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-        set((state) => ({
-          player: { ...state.player, currentHp: newHp },
-          logs: [
-            ...state.logs,
-            {
-              id: `rest_${Date.now()}`,
-              role: "system",
-              speaker: "Short Rest",
-              text: `Your party takes a 1-hour respite, tending wounds and checking gear. Healed ${hitDieRoll.total} HP!`,
-              timestamp: time,
-              rollBreakdown: hitDieRoll.explanation,
-            },
-          ],
-        }));
+        set((state) => {
+          if (!state.player) return state;
+          const updatedPlayer: PlayerCharacter = { ...state.player, currentHp: newHp };
+          const updatedSaves = state.characterSaves.map((slot) =>
+            slot.id === state.activeCharacterId ? { ...slot, player: updatedPlayer } : slot
+          );
+          return {
+            player: updatedPlayer,
+            characterSaves: updatedSaves,
+            logs: [
+              ...state.logs,
+              {
+                id: `rest_${Date.now()}`,
+                role: "system",
+                speaker: "Short Rest",
+                text: `Your party takes a 1-hour respite, tending wounds and checking gear. Healed ${hitDieRoll.total} HP!`,
+                timestamp: time,
+                rollBreakdown: hitDieRoll.explanation,
+              },
+            ],
+          };
+        });
       },
 
       restLong: () => {
         const { player } = get();
+        if (!player) return;
         const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-        set((state) => ({
-          player: {
+        set((state) => {
+          if (!state.player) return state;
+          const updatedPlayer: PlayerCharacter = {
             ...state.player,
             currentHp: state.player.maxHp,
             tempHp: 0,
             spellSlotsLevel1: state.player.maxSpellSlotsLevel1,
             deathSaves: { successes: 0, failures: 0, isStabilized: false, isDead: false, history: [] },
-          },
-          logs: [
-            ...state.logs,
-            {
-              id: `longrest_${Date.now()}`,
-              role: "system",
-              speaker: "Long Rest",
-              text: "Your party sets watch and rests for 8 hours. HP and spell slots fully restored!",
-              timestamp: time,
-            },
-          ],
-        }));
+          };
+          const updatedSaves = state.characterSaves.map((slot) =>
+            slot.id === state.activeCharacterId ? { ...slot, player: updatedPlayer } : slot
+          );
+          return {
+            player: updatedPlayer,
+            characterSaves: updatedSaves,
+            logs: [
+              ...state.logs,
+              {
+                id: `longrest_${Date.now()}`,
+                role: "system",
+                speaker: "Long Rest",
+                text: "Your party sets watch and rests for 8 hours. HP and spell slots fully restored!",
+                timestamp: time,
+              },
+            ],
+          };
+        });
       },
 
       resetGame: () => {
-        set({
-          player: DEFAULT_PLAYER,
-          currentAct: 1,
-          currentLocation: initialStage.locationName,
-          currentObjective: initialStage.objective,
-          ambiance: initialStage.ambiance,
-          logs: [
-            {
-              id: "log_reset",
-              role: "dm",
-              speaker: "Dungeon Master",
-              text: initialStage.description,
-              timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-            },
-          ],
-          isCombatActive: false,
-          combat: null,
-          tacticalMap: null,
-          currentScreen: "title",
+        const { activeCharacterId } = get();
+        const updatedLogs: LogEntry[] = [
+          {
+            id: "log_reset",
+            role: "dm",
+            speaker: "Dungeon Master",
+            text: initialStage.description,
+            timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          },
+        ];
+
+        set((state) => {
+          const updatedSaves = state.characterSaves.map((slot) =>
+            slot.id === activeCharacterId
+              ? {
+                  ...slot,
+                  currentAct: 1,
+                  currentLocation: initialStage.locationName,
+                  currentObjective: initialStage.objective,
+                  ambiance: initialStage.ambiance,
+                  logs: updatedLogs,
+                  player: slot.player
+                    ? {
+                        ...slot.player,
+                        currentHp: slot.player.maxHp,
+                        tempHp: 0,
+                        spellSlotsLevel1: slot.player.maxSpellSlotsLevel1,
+                        deathSaves: { successes: 0, failures: 0, isStabilized: false, isDead: false, history: [] },
+                      }
+                    : slot.player,
+                }
+              : slot
+          );
+
+          return {
+            characterSaves: updatedSaves,
+            player: state.player
+              ? {
+                  ...state.player,
+                  currentHp: state.player.maxHp,
+                  tempHp: 0,
+                  spellSlotsLevel1: state.player.maxSpellSlotsLevel1,
+                  deathSaves: { successes: 0, failures: 0, isStabilized: false, isDead: false, history: [] },
+                }
+              : null,
+            currentAct: 1,
+            currentLocation: initialStage.locationName,
+            currentObjective: initialStage.objective,
+            ambiance: initialStage.ambiance,
+            logs: updatedLogs,
+            isCombatActive: false,
+            combat: null,
+            tacticalMap: null,
+            currentScreen: "title",
+          };
         });
       },
     }),
     {
       name: "wayward_flagon_5e_save",
       partialize: (state) => ({
+        characterSaves: state.characterSaves,
+        activeCharacterId: state.activeCharacterId,
         player: state.player,
         currentAct: state.currentAct,
         currentLocation: state.currentLocation,
         currentObjective: state.currentObjective,
+        ambiance: state.ambiance,
         logs: state.logs,
       }),
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          // Backward-compatibility: if existing save had player but empty characterSaves
+          if (state.player && (!state.characterSaves || state.characterSaves.length === 0)) {
+            const legacyId = "char_legacy_" + (state.player.name.replace(/\s+/g, "_").toLowerCase() || "hero");
+            const legacySlot: CharacterSaveSlot = {
+              id: legacyId,
+              player: state.player,
+              currentAct: state.currentAct || 1,
+              currentLocation: state.currentLocation || initialStage.locationName,
+              currentObjective: state.currentObjective || initialStage.objective,
+              ambiance: state.ambiance || initialStage.ambiance,
+              logs: state.logs || [],
+              createdAt: new Date().toISOString(),
+              lastPlayed: new Date().toISOString(),
+            };
+            state.characterSaves = [legacySlot];
+            state.activeCharacterId = legacyId;
+          }
+        }
+      },
     }
   )
 );
