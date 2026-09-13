@@ -1,6 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
+import { portraitRateLimiter, logAiMetrics } from "@/lib/ai/guardrails";
 
 export async function POST(req: NextRequest) {
+  const clientIp = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "local_session";
+  const rateLimit = portraitRateLimiter.check(clientIp);
+
+  if (!rateLimit.allowed) {
+    logAiMetrics({
+      endpoint: "/api/portrait",
+      model: "portrait_rate_limiter",
+      latencyMs: 0,
+      promptChars: 0,
+      responseChars: 0,
+      status: "rate_limited",
+      errorReason: "Portrait generation rate limit exceeded",
+      timestamp: new Date().toISOString(),
+    });
+  }
+
   try {
     const body = await req.json();
     const { race = "Human", characterClass = "Warrior", description = "" } = body;
@@ -12,24 +29,26 @@ export async function POST(req: NextRequest) {
 
     const externalUrl = `https://image.pollinations.ai/prompt/${prompt}?width=512&height=512&nologo=true&seed=${seed}&model=flux`;
 
-    // Try fetching with timeout
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000);
-      const res = await fetch(externalUrl, { signal: controller.signal });
-      clearTimeout(timeoutId);
+    // Try fetching with timeout if within rate limits
+    if (rateLimit.allowed) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const res = await fetch(externalUrl, { signal: controller.signal });
+        clearTimeout(timeoutId);
 
-      if (res.ok) {
-        const buffer = await res.arrayBuffer();
-        const base64 = Buffer.from(buffer).toString("base64");
-        return NextResponse.json({
-          url: `data:image/jpeg;base64,${base64}`,
-          source: "ai",
-          seed,
-        });
+        if (res.ok) {
+          const buffer = await res.arrayBuffer();
+          const base64 = Buffer.from(buffer).toString("base64");
+          return NextResponse.json({
+            url: `data:image/jpeg;base64,${base64}`,
+            source: "ai",
+            seed,
+          });
+        }
+      } catch (_) {
+        // Ignore network timeout and fall through to procedural SVG
       }
-    } catch (_) {
-      // Ignore network timeout
     }
 
     // Procedural SVG fallback

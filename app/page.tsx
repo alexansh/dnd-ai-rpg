@@ -33,6 +33,7 @@ export default function GamePage() {
 
   useEffect(() => {
     setIsMounted(true);
+    useGameStore.getState().hydrateFromServer();
   }, []);
 
   if (!isMounted) {

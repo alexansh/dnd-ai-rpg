@@ -158,6 +158,8 @@ export interface GameState {
   restShort: () => void;
   restLong: () => void;
   resetGame: () => void;
+  syncSaveToServer: () => Promise<void>;
+  hydrateFromServer: () => Promise<void>;
 }
 
 export function computePlayerAC(player: PlayerCharacter): number {
@@ -289,6 +291,11 @@ export const useGameStore = create<GameState>()(
       openRosterModal: (open) => set({ isRosterModalOpen: open }),
 
       deleteCharacterAndCampaign: (characterId: string) => {
+        try {
+          if (typeof window !== "undefined") {
+            fetch(`/api/saves?id=${encodeURIComponent(characterId)}`, { method: "DELETE" }).catch(() => {});
+          }
+        } catch {}
         const { characterSaves, activeCharacterId } = get();
         const updated = characterSaves.filter((c) => c.id !== characterId);
 
@@ -437,6 +444,7 @@ export const useGameStore = create<GameState>()(
             currentScreen: "title",
           };
         });
+        get().syncSaveToServer();
       },
 
       setPlayer: (updates) =>
@@ -1310,6 +1318,79 @@ export const useGameStore = create<GameState>()(
             currentScreen: "title",
           };
         });
+      },
+
+      syncSaveToServer: async () => {
+        try {
+          if (typeof window === "undefined") return;
+          const { characterSaves, activeCharacterId, player, currentAct, currentLocation, currentObjective, ambiance, logs } = get();
+          if (!activeCharacterId || !player) return;
+
+          const currentSlot = characterSaves.find((s) => s.id === activeCharacterId) || {
+            id: activeCharacterId,
+            player,
+            currentAct,
+            currentLocation,
+            currentObjective,
+            ambiance,
+            logs,
+            createdAt: new Date().toISOString(),
+            lastPlayed: new Date().toISOString(),
+          };
+
+          const updatedSlot: CharacterSaveSlot = {
+            ...currentSlot,
+            player,
+            currentAct,
+            currentLocation,
+            currentObjective,
+            ambiance,
+            logs,
+            lastPlayed: new Date().toISOString(),
+          };
+
+          await fetch("/api/saves", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ save: updatedSlot }),
+          });
+        } catch (err) {
+          console.warn("[PERSISTENCE] Server sync warning:", err);
+        }
+      },
+
+      hydrateFromServer: async () => {
+        try {
+          if (typeof window === "undefined") return;
+          const res = await fetch("/api/saves");
+          if (!res.ok) return;
+          const data = await res.json();
+          if (data.saves && Array.isArray(data.saves) && data.saves.length > 0) {
+            const serverSaves: CharacterSaveSlot[] = data.saves;
+            set((state) => {
+              const isClientEmpty = !state.characterSaves || state.characterSaves.length === 0;
+              const isClientOnlyDefault =
+                state.characterSaves.length === 1 && state.characterSaves[0].id === DEFAULT_SAVE_SLOT.id;
+
+              if (isClientEmpty || isClientOnlyDefault) {
+                const active = serverSaves[0];
+                return {
+                  characterSaves: serverSaves,
+                  activeCharacterId: active.id,
+                  player: active.player,
+                  currentAct: active.currentAct,
+                  currentLocation: active.currentLocation,
+                  currentObjective: active.currentObjective,
+                  ambiance: active.ambiance,
+                  logs: active.logs,
+                };
+              }
+              return state;
+            });
+          }
+        } catch (err) {
+          console.warn("[PERSISTENCE] Server rehydration warning:", err);
+        }
       },
     }),
     {

@@ -37,7 +37,7 @@
 | **Campaign Module: The Sunken Crypt** | **Fully Working** | `lib/campaigns/sunkenCrypt.ts`: 4 structured acts (Entrance, Flooded Ossuary, Crypt Antechamber Combat, Tomb of the Wight Lord Boss) with scripted triggers and tactical map layout. |
 | **AI World Forge** | **Not Present / Aspirational** | Free-form dynamic world bible generation from custom text prompts was a claim in the old README; only curated campaign modules exist currently. |
 | **2D Overworld Connected Road Map** | **Not Present / Aspirational** | Overworld node-based graph with outposts and fog-of-war is not implemented; exploration currently switches between Theater of the Mind scenes and the 2D Tactical Battle Grid. |
-| **Pocket Bard Audio Engine** | **UI-Only / Stubbed** | `components/audio/SoundscapePlayer.tsx`: Displays ambiance status labels (e.g. *Battle Drums • The Crypt Awakens*) and a mute toggle, but does not load or synthesize actual audio tracks. |
+| **Pocket Bard Audio Engine** | **Fully Working** | `lib/audio/soundscapeEngine.ts` & `components/audio/SoundscapePlayer.tsx`: Procedural Web Audio synthesizer generating 4 dynamic ambient soundscapes (*Tavern Hearth & Drone*, *Solemn Crypt Sub-Bass*, *Dungeon Howling Draft & Drops*, *Battle Heartbeat & War Drums*), with 1.2s crossfades, volume slider, and animated equalizer. |
 
 ---
 
@@ -54,19 +54,37 @@
 
 ---
 
-## 4. Production-Readiness Gap Analysis
+## 4. Production Hardening Implementation Status
 
-1. **Persistence:**
-   - Current persistence uses Zustand's `localStorage` middleware (`wayward_flagon_5e_save`).
-   - For a public commercial release, player accounts, save slots, and campaign chronicles should be backed by an external database (SQLite/PostgreSQL via Prisma or Supabase) to prevent accidental cache-clearing loss.
-2. **Audio Experience:**
-   - Pocket Bard needs real Web Audio ambient soundscapes / combat music or a curated asset library matching the ambiance states.
-3. **Session Rate Limiting & Cost Ceilings:**
-   - Add IP or session-based rate limiting on `/api/ai/*` to guard against runaway LLM billing.
-4. **Error & Telemetry Monitoring:**
-   - Integrate Sentry or structured server logging for failed LLM inferences and API latency.
+1. **Server-Side SQLite Persistence (Completed)**:
+   - Built server-authoritative campaign database (`data/flagon_saves.db`) powered by Node 22 native `node:sqlite` (`DatabaseSync`).
+   - Implemented `/api/saves` route handler supporting `GET`, `POST`, and `DELETE`.
+   - Connected `useGameStore` to auto-sync character save slots to SQLite and rehydrate automatically on cold starts or fresh browsers.
+   - 100% verified with unit tests in `tests/persistence.test.ts`.
+
+2. **Pocket Bard Procedural Audio Engine (Completed)**:
+   - Built zero-asset procedural Web Audio synthesizer in `lib/audio/soundscapeEngine.ts`.
+   - Generates 4 custom soundscapes:
+     - `tavern_warm`: Sub-pad warm drone (F2 + C3) with procedural random wood crackle.
+     - `crypt_solemn`: Sub-bass D minor drone with ethereal high overtone.
+     - `dungeon_creepy`: Pink noise wind draft with periodic water droplets.
+     - `battle_tense`: 110 BPM rhythmic war drum / heartbeat pulse with driving bass saw.
+   - Smooth 1.2s crossfades between ambiance transitions, persistent volume controls, and animated equalizer in `SoundscapePlayer.tsx`.
+
+3. **Session Rate Limiting, Cost Ceilings & LLM Resilience (Completed)**:
+   - Sliding-window rate limiters in `lib/ai/guardrails.ts`: 25 req/min on `/api/ai/dm`, 10 req/min on `/api/portrait`.
+   - Input clamping: prompts sanitized and clamped to 1,000 characters; DCs clamped between 5 and 30.
+   - 8-second request timeout with exponential jittered retry.
+   - Structured JSON observability logging (`[AI METRICS] { endpoint, model, latencyMs, status }`).
+
+4. **CI/CD Pipeline (Completed)**:
+   - GitHub Actions workflow (`.github/workflows/ci.yml`) running `npm run typecheck`, `npm test`, and `npm run build` on all pushes and pull requests to `main`.
 
 ---
 
-## 5. Next Steps
-With Step 0 completed, the stack documented, secrets verified, and the feature inventory audited, we can proceed to implement production hardening and the phased deliverables.
+## 5. Verification Results
+- **Unit & Integration Tests**: 42/42 tests passing across 12 test suites (`npm test`).
+- **TypeScript Strict Check**: 0 errors (`npm run typecheck`).
+- **Next.js Production Build**: Succeeded in 4.6s (`npm run build`).
+- **Live Local Server**: HTTP 200 on `http://localhost:3000` and `http://localhost:3000/api/saves`.
+

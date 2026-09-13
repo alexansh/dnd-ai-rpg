@@ -27,3 +27,6 @@ pnpm-debug.log*
 # Temporary & Log files
 *.log
 .data/
+data/*.db
+data/*.db-shm
+data/*.db-wal
