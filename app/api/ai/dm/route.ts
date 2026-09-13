@@ -10,6 +10,9 @@ export async function POST(req: NextRequest) {
       questStep: body.questStep || "Explore the depths",
       partySummary: body.partySummary || "Adventuring Party",
       recentRollResult: body.recentRollResult,
+      inputMode: body.inputMode,
+      authorNote: body.authorNote,
+      sessionSummary: body.sessionSummary,
     });
     return NextResponse.json(result);
   } catch (error: any) {

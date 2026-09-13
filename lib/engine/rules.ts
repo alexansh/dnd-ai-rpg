@@ -1,4 +1,4 @@
-﻿import { AbilityScoreKey, DamageType, Condition } from "../srd/types";
+import { AbilityScoreKey, DamageType, Condition } from "../srd/types";
 import { executeRoll, RollResult, rollAdvantage, rollDisadvantage, rollStandard } from "./dice";
 
 export function calculateAbilityModifier(score: number): number {
@@ -115,6 +115,7 @@ export function resolveAttackRoll(params: {
 }
 
 export interface DamageOutcome {
+  rollResult: RollResult;
   rawDamage: number;
   effectiveDamage: number;
   damageType: DamageType;
@@ -165,6 +166,7 @@ export function resolveDamage(params: {
   const breakdown = `${roll.explanation} ${params.damageType} damage${modifierText} ➔ ${effectiveDamage} HP lost`;
 
   return {
+    rollResult: roll,
     rawDamage,
     effectiveDamage,
     damageType: params.damageType,

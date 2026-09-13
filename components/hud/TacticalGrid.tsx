@@ -3,12 +3,14 @@
 import React, { useRef, useEffect, useState } from "react";
 import { useGameStore } from "@/lib/state/useGameStore";
 import { calculateDistanceFt, isWithinRange } from "@/lib/engine/tactical";
+import AttackPanel from "@/components/combat/AttackPanel";
 
 export default function TacticalGrid() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const { combat, tacticalMap, selectedCombatantId, movePlayerCombatant, executePlayerCombatAttack } = useGameStore();
 
   const [hoverPos, setHoverPos] = useState<{ x: number; y: number } | null>(null);
+  const [pendingTargetId, setPendingTargetId] = useState<string | null>(null);
 
   const cellSize = 54; // pixels per 5ft square
 
@@ -179,10 +181,7 @@ export default function TacticalGrid() {
     );
 
     if (targetEnemy) {
-      // Check if within 5ft melee reach
-      if (isWithinRange(activeCombatant.gridPosition, targetEnemy.gridPosition, 5)) {
-        executePlayerCombatAttack(targetEnemy.id);
-      }
+      setPendingTargetId(targetEnemy.id);
       return;
     }
 
@@ -197,6 +196,13 @@ export default function TacticalGrid() {
 
   return (
     <div className="relative flex flex-col items-center justify-center p-4 bg-obsidian-950/80 rounded-xl border border-gold-500/30 backdrop-blur-md">
+      {/* Confirm-before-commit Attack Panel */}
+      <AttackPanel
+        targetId={pendingTargetId}
+        onClose={() => setPendingTargetId(null)}
+        onConfirm={(targetId) => executePlayerCombatAttack(targetId)}
+      />
+
       <div className="flex items-center justify-between w-full mb-3 px-2">
         <div className="flex items-center gap-2">
           <span className="w-2.5 h-2.5 rounded-full bg-blood-500 animate-pulse" />

@@ -1,4 +1,4 @@
-﻿import { Condition } from "../srd/types";
+import { Condition } from "../srd/types";
 import { executeRoll } from "./dice";
 
 export interface Combatant {
@@ -157,3 +157,67 @@ export function applyDamageToCombatant(combatant: Combatant, damage: number): {
     knockedOut,
   };
 }
+
+/**
+ * Checks if moving from fromPos to toPos leaves the 5ft reach of any active hostile enemies.
+ */
+export function checkOpportunityAttackTrigger(
+  mover: Combatant,
+  fromPos: { x: number; y: number },
+  toPos: { x: number; y: number },
+  enemies: Combatant[],
+  hasDisengaged: boolean = false
+): Combatant[] {
+  if (hasDisengaged) return [];
+  const triggeringEnemies: Combatant[] = [];
+
+  for (const enemy of enemies) {
+    if (
+      enemy.currentHp <= 0 ||
+      enemy.reactionUsed ||
+      enemy.conditions.includes("incapacitated") ||
+      enemy.conditions.includes("paralyzed") ||
+      enemy.conditions.includes("stunned") ||
+      enemy.conditions.includes("unconscious")
+    ) {
+      continue;
+    }
+
+    // 5ft reach is <= 1 Chebyshev unit
+    const wasInRange = Math.max(Math.abs(enemy.gridPosition.x - fromPos.x), Math.abs(enemy.gridPosition.y - fromPos.y)) <= 1;
+    const nowOutOfRange = Math.max(Math.abs(enemy.gridPosition.x - toPos.x), Math.abs(enemy.gridPosition.y - toPos.y)) > 1;
+
+    if (wasInRange && nowOutOfRange) {
+      triggeringEnemies.push(enemy);
+    }
+  }
+
+  return triggeringEnemies;
+}
+
+/**
+ * Calculates d20 hit probability percentage and required roll vs target effective AC.
+ */
+export function calculateHitProbability(
+  attackBonus: number,
+  targetAC: number,
+  coverBonus: number = 0
+): {
+  toHitNeeded: number;
+  probabilityPercent: number;
+  effectiveAC: number;
+} {
+  const effectiveAC = targetAC + coverBonus;
+  const neededRoll = effectiveAC - attackBonus;
+  // Natural 1 is always a miss (max 95%), natural 20 always hits (min 5%)
+  const clampedRoll = Math.max(2, Math.min(20, neededRoll));
+  const successes = 21 - clampedRoll;
+  const probabilityPercent = Math.round((successes / 20) * 100);
+
+  return {
+    toHitNeeded: neededRoll,
+    probabilityPercent,
+    effectiveAC,
+  };
+}
+

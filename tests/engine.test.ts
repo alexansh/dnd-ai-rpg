@@ -10,7 +10,14 @@ import {
   resolveDeathSavingThrow,
 } from "../lib/engine/rules";
 import { calculateDistanceFt, hasLineOfSight, getCoverBonus, TacticalNode } from "../lib/engine/tactical";
-import { initializeCombat, advanceTurn, applyDamageToCombatant } from "../lib/engine/combat";
+import {
+  initializeCombat,
+  advanceTurn,
+  applyDamageToCombatant,
+  checkOpportunityAttackTrigger,
+  calculateHitProbability,
+  Combatant,
+} from "../lib/engine/combat";
 
 test("Dice Parser & Roll Engine", async (t) => {
   await t.test("parses standard notation and calculates totals", () => {
@@ -162,5 +169,75 @@ test("Tactical Grid & Combat Mechanics", async (t) => {
     assert.strictEqual(result.combatant.tempHp, 0);
     assert.strictEqual(result.combatant.currentHp, 17);
     assert.strictEqual(result.died, false);
+  });
+
+  await t.test("Opportunity attack trigger when leaving 5ft enemy reach", () => {
+    const player: Combatant = {
+      id: "p1",
+      name: "Fighter",
+      isPlayer: true,
+      isCompanion: false,
+      isEnemy: false,
+      armorClass: 16,
+      currentHp: 20,
+      maxHp: 20,
+      tempHp: 0,
+      speed: 30,
+      initiative: 15,
+      initiativeModifier: 2,
+      conditions: [],
+      gridPosition: { x: 2, y: 2 },
+      portrait: "",
+      actionUsed: false,
+      bonusActionUsed: false,
+      reactionUsed: false,
+      movementUsedFt: 0,
+      weaponAttackBonus: 5,
+      weaponDamageDice: "1d8+3",
+      weaponDamageType: "slashing",
+    };
+
+    const enemy: Combatant = {
+      ...player,
+      id: "e1",
+      name: "Skeleton",
+      isPlayer: false,
+      isEnemy: true,
+      gridPosition: { x: 2, y: 3 }, // adjacent (within 5ft reach)
+    };
+
+    // Moving away from (2,2) to (2,0) moves out of (2,3)'s 5ft reach
+    const triggered = checkOpportunityAttackTrigger(
+      player,
+      { x: 2, y: 2 },
+      { x: 2, y: 0 },
+      [enemy],
+      false
+    );
+    assert.strictEqual(triggered.length, 1);
+    assert.strictEqual(triggered[0].id, "e1");
+
+    // If disengaged, no opportunity attack
+    const disengaged = checkOpportunityAttackTrigger(
+      player,
+      { x: 2, y: 2 },
+      { x: 2, y: 0 },
+      [enemy],
+      true
+    );
+    assert.strictEqual(disengaged.length, 0);
+  });
+
+  await t.test("Hit probability calculation", () => {
+    // Attack bonus +5 vs AC 15: needs roll of 10+
+    // Rolls 10..20 = 11 successful outcomes out of 20 = 55%
+    const prob = calculateHitProbability(5, 15, 0);
+    assert.strictEqual(prob.toHitNeeded, 10);
+    assert.strictEqual(prob.probabilityPercent, 55);
+
+    // With +2 cover bonus: AC 17, needs 12+ (9 outcomes) = 45%
+    const probCover = calculateHitProbability(5, 15, 2);
+    assert.strictEqual(probCover.toHitNeeded, 12);
+    assert.strictEqual(probCover.probabilityPercent, 45);
   });
 });

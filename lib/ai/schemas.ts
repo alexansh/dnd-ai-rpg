@@ -1,5 +1,16 @@
 import { z } from "zod";
 
+export const LootEventSchema = z.object({
+  type: z.enum(["grant_item", "remove_item", "grant_gold", "spend_gold"]),
+  itemId: z.string().optional(),
+  itemName: z.string().optional(),
+  qty: z.number().optional().default(1),
+  gp: z.number().optional().default(0),
+  reason: z.string().optional().default("Found or acquired"),
+});
+
+export type LootEvent = z.input<typeof LootEventSchema>;
+
 export const GameNarrativeStepSchema = z.object({
   narrative: z.string().describe("Sensory, evocative description of scene, 2-4 sentences, ending with an actionable choice."),
   currentLocation: z.string().describe("Name of current zone or chamber"),
@@ -38,6 +49,7 @@ export const GameNarrativeStepSchema = z.object({
     )
     .default([]),
   suggestedActions: z.array(z.string()).min(2).max(4),
+  lootEvents: z.array(LootEventSchema).default([]),
 });
 
 export type GameNarrativeStep = z.infer<typeof GameNarrativeStepSchema>;

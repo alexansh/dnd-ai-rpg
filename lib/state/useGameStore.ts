@@ -25,10 +25,13 @@ import {
   initializeCombat,
   advanceTurn,
   applyDamageToCombatant,
+  checkOpportunityAttackTrigger,
 } from "../engine/combat";
 import { calculateDistanceFt, isWithinRange, TacticalMapLayout } from "../engine/tactical";
 import { COMPANION_PROFILES, CompanionProfile, decideCompanionCombatTurn } from "../ai/companion-agent";
 import { SUNKEN_CRYPT_STAGES, generateTacticalMap, QuestStage } from "../campaigns/sunkenCrypt";
+import { LootEvent } from "../ai/schemas";
+import { getItemDefinition, processLootEvent } from "../engine/inventory";
 
 export interface LogEntry {
   id: string;
@@ -58,6 +61,7 @@ export interface PlayerCharacter {
   equippedWeapon: string;
   equippedArmor: string;
   equippedShield?: string;
+  gold: number;
   inspiration: boolean;
   deathSaves: DeathSaveState;
   portrait: string;
@@ -137,7 +141,7 @@ export interface GameState {
   openBestiary: (open: boolean, monsterKey?: string) => void;
   openCreation: (open: boolean) => void;
   openSpellbook: (open: boolean) => void;
-  submitPlayerAction: (actionText: string) => Promise<void>;
+  submitPlayerAction: (actionText: string, mode?: "do" | "say" | "story") => Promise<void>;
   performSkillCheck: (skill: string, dc: number, ability: "str" | "dex" | "con" | "int" | "wis" | "cha") => Promise<void>;
   startCombatEncounter: (stage: number) => void;
   executePlayerCombatAttack: (targetId: string) => void;
@@ -147,9 +151,35 @@ export interface GameState {
   endCurrentCombatTurn: () => void;
   runCompanionTurn: () => void;
   advanceQuestAct: (nextAct: number) => void;
+  applyLootEvent: (event: LootEvent) => void;
+  equipItem: (itemId: string, slot: "weapon" | "armor" | "shield") => void;
+  unequipItem: (slot: "weapon" | "armor" | "shield") => void;
+  useConsumable: (itemId: string) => void;
   restShort: () => void;
   restLong: () => void;
   resetGame: () => void;
+}
+
+export function computePlayerAC(player: PlayerCharacter): number {
+  const dexMod = calculateAbilityModifier(player.abilities.dex);
+  let baseAC = 10 + dexMod;
+  if (player.equippedArmor) {
+    const armorDef = getItemDefinition(player.equippedArmor);
+    if (armorDef?.baseArmorClass) {
+      if (player.equippedArmor === "chain_mail" || player.equippedArmor === "plate_armor") {
+        baseAC = armorDef.baseArmorClass;
+      } else if (player.equippedArmor === "scale_mail") {
+        baseAC = armorDef.baseArmorClass + Math.min(2, Math.max(0, dexMod));
+      } else {
+        baseAC = armorDef.baseArmorClass + dexMod;
+      }
+    }
+  }
+  if (player.equippedShield) {
+    const shieldDef = getItemDefinition(player.equippedShield);
+    baseAC += shieldDef?.armorClassBonus ?? 2;
+  }
+  return baseAC;
 }
 
 const DEFAULT_PLAYER: PlayerCharacter = {
@@ -171,6 +201,7 @@ const DEFAULT_PLAYER: PlayerCharacter = {
   equippedWeapon: "longsword",
   equippedArmor: "chain_mail",
   equippedShield: "shield",
+  gold: 75,
   inspiration: true,
   deathSaves: { successes: 0, failures: 0, isStabilized: false, isDead: false, history: [] },
   portrait: "/assets/images/archetypes/warrior.jpg",
@@ -424,17 +455,168 @@ export const useGameStore = create<GameState>()(
       openCreation: (open) => set({ isCreationOpen: open }),
       openSpellbook: (open) => set({ isSpellbookOpen: open }),
 
-      submitPlayerAction: async (actionText) => {
+      applyLootEvent: (event: LootEvent) => {
+        const { player, activeCharacterId } = get();
+        if (!player) return;
+        const currentGold = player.gold ?? 50;
+        const { newInventory, newGold, logText } = processLootEvent(player.inventory, currentGold, event);
+        const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+        const lootLog: LogEntry = {
+          id: `loot_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          role: "system",
+          speaker: "Loot & Inventory",
+          text: logText,
+          timestamp: time,
+        };
+
+        set((state) => {
+          if (!state.player) return state;
+          const updatedPlayer: PlayerCharacter = {
+            ...state.player,
+            inventory: newInventory,
+            gold: newGold,
+          };
+          const updatedSaves = state.characterSaves.map((slot) =>
+            slot.id === activeCharacterId ? { ...slot, player: updatedPlayer } : slot
+          );
+          return {
+            player: updatedPlayer,
+            characterSaves: updatedSaves,
+            logs: [...state.logs, lootLog],
+          };
+        });
+      },
+
+      equipItem: (itemId: string, slot: "weapon" | "armor" | "shield") => {
+        const { player, activeCharacterId } = get();
+        if (!player) return;
+        const itemDef = getItemDefinition(itemId);
+        if (!itemDef) return;
+
+        const updated: PlayerCharacter = { ...player };
+        if (slot === "weapon") updated.equippedWeapon = itemId;
+        if (slot === "armor") updated.equippedArmor = itemId;
+        if (slot === "shield") updated.equippedShield = itemId;
+        updated.armorClass = computePlayerAC(updated);
+
+        const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        const log: LogEntry = {
+          id: `equip_${Date.now()}`,
+          role: "system",
+          speaker: "Equipment",
+          text: `Equipped ${itemDef.name} (${slot}). Armor Class is now ${updated.armorClass}.`,
+          timestamp: time,
+        };
+
+        set((state) => {
+          const updatedSaves = state.characterSaves.map((s) =>
+            s.id === activeCharacterId ? { ...s, player: updated } : s
+          );
+          return { player: updated, characterSaves: updatedSaves, logs: [...state.logs, log] };
+        });
+      },
+
+      unequipItem: (slot: "weapon" | "armor" | "shield") => {
+        const { player, activeCharacterId } = get();
+        if (!player) return;
+
+        const updated: PlayerCharacter = { ...player };
+        let unequippedName = "";
+        if (slot === "weapon") {
+          unequippedName = getItemDefinition(updated.equippedWeapon)?.name || "weapon";
+          updated.equippedWeapon = "";
+        } else if (slot === "armor") {
+          unequippedName = getItemDefinition(updated.equippedArmor)?.name || "armor";
+          updated.equippedArmor = "";
+        } else if (slot === "shield") {
+          unequippedName = updated.equippedShield ? getItemDefinition(updated.equippedShield)?.name || "shield" : "shield";
+          updated.equippedShield = undefined;
+        }
+        updated.armorClass = computePlayerAC(updated);
+
+        const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        const log: LogEntry = {
+          id: `unequip_${Date.now()}`,
+          role: "system",
+          speaker: "Equipment",
+          text: `Unequipped ${unequippedName}. Armor Class is now ${updated.armorClass}.`,
+          timestamp: time,
+        };
+
+        set((state) => {
+          const updatedSaves = state.characterSaves.map((s) =>
+            s.id === activeCharacterId ? { ...s, player: updated } : s
+          );
+          return { player: updated, characterSaves: updatedSaves, logs: [...state.logs, log] };
+        });
+      },
+
+      useConsumable: (itemId: string) => {
+        const { player, activeCharacterId } = get();
+        if (!player) return;
+        const idx = player.inventory.indexOf(itemId);
+        if (idx === -1) return;
+
+        const itemDef = getItemDefinition(itemId);
+        const newInventory = [...player.inventory];
+        newInventory.splice(idx, 1);
+
+        const updatedPlayer: PlayerCharacter = { ...player, inventory: newInventory };
+        const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        let logText = `Used ${itemDef?.name || itemId}.`;
+        let breakdown: string | undefined;
+
+        if (itemDef?.healingDice) {
+          const roll = executeRoll(itemDef.healingDice, `${itemDef.name} Recovery`);
+          const newHp = Math.min(player.maxHp, player.currentHp + roll.total);
+          updatedPlayer.currentHp = newHp;
+          logText = `Quaffed ${itemDef.name}! Restored ${roll.total} HP. (Current HP: ${newHp}/${player.maxHp})`;
+          breakdown = roll.explanation;
+        }
+
+        const log: LogEntry = {
+          id: `item_${Date.now()}`,
+          role: "system",
+          speaker: "Item Use",
+          text: logText,
+          timestamp: time,
+          rollBreakdown: breakdown,
+        };
+
+        set((state) => {
+          const updatedSaves = state.characterSaves.map((slot) =>
+            slot.id === activeCharacterId ? { ...slot, player: updatedPlayer } : slot
+          );
+          return {
+            player: updatedPlayer,
+            characterSaves: updatedSaves,
+            logs: [...state.logs, log],
+          };
+        });
+      },
+
+      submitPlayerAction: async (actionText, mode = "do") => {
         const { currentAct, currentLocation, currentObjective, player } = get();
         if (!player) return;
         const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+        let speakerName = player.name;
+        let formattedText = actionText;
+        if (mode === "say") {
+          speakerName = `${player.name} (Dialogue)`;
+          formattedText = `"${actionText}"`;
+        } else if (mode === "story") {
+          speakerName = "Chronicler Steering";
+          formattedText = `✦ Story Directive: ${actionText}`;
+        }
 
         // Add player utterance to log
         const playerLog: LogEntry = {
           id: `log_${Date.now()}`,
           role: "player",
-          speaker: player.name,
-          text: actionText,
+          speaker: speakerName,
+          text: formattedText,
           timestamp: time,
         };
 
@@ -450,6 +632,7 @@ export const useGameStore = create<GameState>()(
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               playerAction: actionText,
+              inputMode: mode,
               currentLocation,
               questStep: currentObjective,
               partySummary: `${player.name} (${player.className}), Sister Beatrice (Cleric), Vaelin (Rogue), Garrick (Fighter)`,
@@ -473,6 +656,12 @@ export const useGameStore = create<GameState>()(
               pointsOfInterest: data.pointsOfInterest?.length ? data.pointsOfInterest : state.pointsOfInterest,
               ambiance: data.ambiance ?? state.ambiance,
             }));
+
+            if (data.lootEvents && Array.isArray(data.lootEvents) && data.lootEvents.length > 0) {
+              for (const lootEvent of data.lootEvents) {
+                get().applyLootEvent(lootEvent);
+              }
+            }
 
             if (data.combatTrigger) {
               get().startCombatEncounter(currentAct >= 3 ? currentAct : 3);
@@ -810,19 +999,66 @@ export const useGameStore = create<GameState>()(
         const maxMove = combatant.speed - combatant.movementUsedFt;
         if (distance > maxMove) return;
 
-        const updated = combat.combatants.map((c) =>
-          c.id === combatantId
-            ? { ...c, gridPosition: dest, movementUsedFt: c.movementUsedFt + distance }
-            : c
+        const enemies = combat.combatants.filter((c) => (combatant.isPlayer ? c.isEnemy : c.isPlayer));
+        const triggeringFoes = checkOpportunityAttackTrigger(
+          combatant,
+          combatant.gridPosition,
+          dest,
+          enemies
         );
 
-        set({
+        const oppAtkLogs: string[] = [];
+        let curHp = combatant.currentHp;
+        const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+        for (const foe of triggeringFoes) {
+          const roll = executeRoll(`1d20+${foe.weaponAttackBonus}`, `${foe.name} Opportunity Attack`);
+          if (roll.total >= combatant.armorClass) {
+            const dmg = executeRoll(foe.weaponDamageDice, `${foe.name} Damage`);
+            curHp = Math.max(0, curHp - dmg.total);
+            oppAtkLogs.push(`⚠️ Opportunity Attack! ${foe.name} strikes ${combatant.name} for ${dmg.total} ${foe.weaponDamageType} damage! (${roll.explanation})`);
+          } else {
+            oppAtkLogs.push(`🛡️ Opportunity Attack! ${foe.name} misses ${combatant.name} with roll ${roll.total} vs AC ${combatant.armorClass}.`);
+          }
+          foe.reactionUsed = true;
+        }
+
+        const updated = combat.combatants.map((c) => {
+          if (c.id === combatantId) {
+            return {
+              ...c,
+              currentHp: curHp,
+              gridPosition: dest,
+              movementUsedFt: c.movementUsedFt + distance,
+            };
+          }
+          const foeMatch = triggeringFoes.find((f) => f.id === c.id);
+          if (foeMatch) {
+            return { ...c, reactionUsed: true };
+          }
+          return c;
+        });
+
+        const moveLog = `${combatant.name} moved to (${dest.x}, ${dest.y}) [${distance} ft].`;
+        const allNewLogs = [moveLog, ...oppAtkLogs];
+
+        set((state) => ({
           combat: {
             ...combat,
             combatants: updated,
-            log: [...combat.log, `${combatant.name} moved to (${dest.x}, ${dest.y}) [${distance} ft].`],
+            log: [...combat.log, ...allNewLogs],
           },
-        });
+          logs: oppAtkLogs.length > 0 ? [
+            ...state.logs,
+            ...oppAtkLogs.map((text) => ({
+              id: `opp_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+              role: "system" as const,
+              speaker: "Opportunity Attack",
+              text,
+              timestamp: time,
+            })),
+          ] : state.logs,
+        }));
       },
 
       movePlayerCombatant: (dest: { x: number; y: number }) => {
